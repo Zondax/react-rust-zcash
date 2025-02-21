@@ -13,19 +13,38 @@ export default function App() {
 
   const handleCalculateFee = async () => {
     try {
-      console.log("Calculating fee with inputs:", {
-        nTxin,
-        nTxout,
-        nSpend,
-        nSout,
-      });
+      // Validate all inputs are non-empty and numeric
+      if (!nTxin || !nTxout || !nSpend || !nSout) {
+        setError("All fields are required");
+        return;
+      }
 
-      // Convert inputs to numbers before passing to the Rust function
+      const inputs = {
+        nTxin: parseInt(nTxin, 10),
+        nTxout: parseInt(nTxout, 10),
+        nSpend: parseInt(nSpend, 10),
+        nSout: parseInt(nSout, 10),
+      };
+
+      // Validate all parsed values are valid numbers
+      if (Object.values(inputs).some(isNaN)) {
+        setError("All fields must be valid numbers");
+        return;
+      }
+
+      // Validate all values are non-negative
+      if (Object.values(inputs).some((val) => val < 0)) {
+        setError("All values must be non-negative");
+        return;
+      }
+
+      console.log("Calculating fee with inputs:", inputs);
+
       const fee = await calculateFee(
-        parseInt(nTxin, 10),
-        parseInt(nTxout, 10),
-        parseInt(nSpend, 10),
-        parseInt(nSout, 10),
+        inputs.nTxin,
+        inputs.nTxout,
+        inputs.nSpend,
+        inputs.nSout,
       );
 
       console.log("Fee calculation result:", fee);
