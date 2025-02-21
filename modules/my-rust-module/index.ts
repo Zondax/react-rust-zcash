@@ -12,30 +12,30 @@ import {
   ChangeEventPayload,
   MyRustModuleViewProps,
 } from "./src/MyRustModule.types";
-
-// Get the native constant value.
+// Export the native constant value
 export const PI = MyRustModule.PI;
 
-// export function hello(): string {
-//   return MyRustModule.hello();
-// }
-
+// Export the fee calculation function
 export async function calculateFee(
-  n_txin: number,
-  n_txout: number,
-  n_spend: number,
-  n_sout: number,
+  nTxin: number,
+  nTxout: number,
+  nSpend: number,
+  nSout: number,
 ): Promise<number> {
-  return await MyRustModule.calculateFee(n_txin, n_txout, n_spend, n_sout);
+  console.log("Calling native calculateFee with:", {
+    nTxin,
+    nTxout,
+    nSpend,
+    nSout,
+  });
+  return await MyRustModule.calculateFee(nTxin, nTxout, nSpend, nSout);
 }
 
 export async function setValueAsync(value: string) {
   return await MyRustModule.setValueAsync(value);
 }
 
-const emitter = new EventEmitter(
-  MyRustModule ?? NativeModulesProxy.MyRustModule,
-);
+const emitter = new EventEmitter(MyRustModule);
 
 export function addChangeListener(
   listener: (event: ChangeEventPayload) => void,
