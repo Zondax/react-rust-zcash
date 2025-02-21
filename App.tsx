@@ -8,24 +8,39 @@ export default function App() {
   const [nTxout, setNTxout] = useState("");
   const [nSpend, setNSpend] = useState("");
   const [nSout, setNSout] = useState("");
-
   const [value, setValue] = useState<null | number>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleCalculateFee = async () => {
-    // Convert inputs to numbers before passing to the Rust function
-    const fee = await calculateFee(
-      parseInt(nTxin, 10),
-      parseInt(nTxout, 10),
-      parseInt(nSpend, 10),
-      parseInt(nSout, 10),
-    );
-    setValue(fee);
+    try {
+      console.log("Calculating fee with inputs:", {
+        nTxin,
+        nTxout,
+        nSpend,
+        nSout,
+      });
+
+      // Convert inputs to numbers before passing to the Rust function
+      const fee = await calculateFee(
+        parseInt(nTxin, 10),
+        parseInt(nTxout, 10),
+        parseInt(nSpend, 10),
+        parseInt(nSout, 10),
+      );
+
+      console.log("Fee calculation result:", fee);
+      setValue(fee);
+      setError(null);
+    } catch (err) {
+      console.error("Error calculating fee:", err);
+      setError(err instanceof Error ? err.message : "Unknown error occurred");
+      setValue(null);
+    }
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Transaction Fee Calculator</Text>
-
       {/* Input for n_txin */}
       <TextInput
         style={styles.input}
@@ -34,7 +49,6 @@ export default function App() {
         onChangeText={setNTxin}
         keyboardType="numeric"
       />
-
       {/* Input for n_txout */}
       <TextInput
         style={styles.input}
@@ -43,7 +57,6 @@ export default function App() {
         onChangeText={setNTxout}
         keyboardType="numeric"
       />
-
       {/* Input for n_spend */}
       <TextInput
         style={styles.input}
@@ -52,7 +65,6 @@ export default function App() {
         onChangeText={setNSpend}
         keyboardType="numeric"
       />
-
       {/* Input for n_sout */}
       <TextInput
         style={styles.input}
@@ -61,13 +73,13 @@ export default function App() {
         onChangeText={setNSout}
         keyboardType="numeric"
       />
-
       <Button title="Calculate Fee" onPress={handleCalculateFee} />
+
+      {error && <Text style={styles.error}>{error}</Text>}
 
       <Text style={styles.result}>
         {value === null ? "Result will appear here..." : `Fee: ${value}`}
       </Text>
-
       <StatusBar style="auto" />
     </View>
   );
@@ -97,5 +109,9 @@ const styles = StyleSheet.create({
   result: {
     marginTop: 20,
     fontSize: 24,
+  },
+  error: {
+    color: "red",
+    marginTop: 10,
   },
 });

@@ -2,59 +2,55 @@ package expo.modules.myrustmodule
 
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import android.util.Log
 
 class MyRustModule : Module() {
-  companion object {
-    // Load the native library
-    init {
-        System.loadLibrary("native_rust_lib")
-    }
-  }
-
-  external fun rustAdd(a: Int, b: Int): Int
-
-  // Each module class must implement the definition function. The definition consists of components
-  // that describes the module's functionality and behavior.
-  // See https://docs.expo.dev/modules/module-api for more details about available components.
-  override fun definition() = ModuleDefinition {
-    // Sets the name of the module that JavaScript code will use to refer to the module. Takes a string as an argument.
-    // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
-    // The module will be accessible from `requireNativeModule('MyRustModule')` in JavaScript.
-    Name("MyRustModule")
-
-    // Sets constant properties on the module. Can take a dictionary or a closure that returns a dictionary.
-    Constants(
-      "PI" to Math.PI
-    )
-
-    // Defines event names that the module can send to JavaScript.
-    Events("onChange")
-
-    // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
-    Function("hello") {
-      "Hello world! 👋"
+    companion object {
+        init {
+            try {
+                System.loadLibrary("native_rust_lib")
+                Log.d("MyRustModule", "Native library loaded successfully")
+            } catch (e: UnsatisfiedLinkError) {
+                Log.e("MyRustModule", "Failed to load native library", e)
+            }
+        }
     }
 
-    AsyncFunction("rustAdd") { a: Int, b: Int ->
-      rustAdd(a, b)
-    }
+    // Native method declaration
+    private external fun calculateFee(nTxin: Int, nTxout: Int, nSpend: Int, nSout: Int): Long
 
-    // Defines a JavaScript function that always returns a Promise and whose native code
-    // is by default dispatched on the different thread than the JavaScript runtime runs on.
-    AsyncFunction("setValueAsync") { value: String ->
-      // Send an event to JavaScript.
-      sendEvent("onChange", mapOf(
-        "value" to value
-      ))
-    }
+    override fun definition() = ModuleDefinition {
+        Name("MyRustModule")
 
-    // Enables the module to be used as a native view. Definition components that are accepted as part of
-    // the view definition: Prop, Events.
-    View(MyRustModuleView::class) {
-      // Defines a setter for the `name` prop.
-      Prop("name") { view: MyRustModuleView, prop: String ->
-        println(prop)
-      }
+        Constants(
+            "PI" to Math.PI
+        )
+
+        // Expose the calculate fee function to JavaScript
+        AsyncFunction("calculateFee") { nTxin: Int, nTxout: Int, nSpend: Int, nSout: Int ->
+            try {
+                Log.d("MyRustModule", "Calling native calculateFee: $nTxin, $nTxout, $nSpend, $nSout")
+                val result = calculateFee(nTxin, nTxout, nSpend, nSout)
+                Log.d("MyRustModule", "Native calculateFee result: $result")
+                result.toDouble() // Convert to Double for JavaScript
+            } catch (e: Exception) {
+                Log.e("MyRustModule", "Error in calculateFee", e)
+                throw e
+            }
+        }
+
+        Events("onChange")
+
+        AsyncFunction("setValueAsync") { value: String ->
+            sendEvent("onChange", mapOf(
+                "value" to value
+            ))
+        }
+
+        View(MyRustModuleView::class) {
+            Prop("name") { view: MyRustModuleView, prop: String ->
+                println(prop)
+            }
+        }
     }
-  }
 }
