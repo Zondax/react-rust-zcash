@@ -13,17 +13,12 @@ export default function App() {
 
   const handleCalculateFee = async () => {
     try {
-      // Validate all inputs are non-empty and numeric
-      if (!nTxin || !nTxout || !nSpend || !nSout) {
-        setError("All fields are required");
-        return;
-      }
-
+      // Validate all inputs for empty ones we default to 0
       const inputs = {
-        nTxin: parseInt(nTxin, 10),
-        nTxout: parseInt(nTxout, 10),
-        nSpend: parseInt(nSpend, 10),
-        nSout: parseInt(nSout, 10),
+        nTxin: nTxin ? parseInt(nTxin, 10) : 0,
+        nTxout: nTxout ? parseInt(nTxout, 10) : 0,
+        nSpend: nSpend ? parseInt(nSpend, 10) : 0,
+        nSout: nSout ? parseInt(nSout, 10) : 0,
       };
 
       // Validate all parsed values are valid numbers

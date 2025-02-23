@@ -3,13 +3,14 @@ name = "native_rust_lib"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+crate-type = ["staticlib", "cdylib"]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 # zcashtool = { git = "https://github.com/Zondax/ledger-zcash", package = "zcashtool", directory = "zcashtools/neon/native" }
-jni = "0.21.1"
 log = "0.4"
-android_logger = "0.13"
 
 rand_core = "0.6.4"
 snafu = { version = "0.8.2" }
@@ -21,5 +22,6 @@ zcash_primitives = { git = "https://github.com/Zondax/librustzcash", rev = "ce27
 ledger-chain-builder = { git = "https://github.com/Zondax/ledger-zcash-tools", tag = "v2.0.0", package = "ledger-zcash-chain-builder" }
 ledger-app-builder = { git = "https://github.com/Zondax/ledger-zcash-tools", tag = "v2.0.0", package = "ledger-zcash-app-builder" }
 
-[lib]
-crate-type = ["staticlib", "cdylib"]
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.13"
+jni = "0.21.1"

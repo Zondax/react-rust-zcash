@@ -14,7 +14,7 @@ pub extern "C" fn calculate_fee(
 /// cbindgen:ignore
 #[cfg(target_os = "android")]
 pub mod android {
-    use android_logger::{Config, FilterBuilder};
+    use android_logger::Config;
     use jni::sys::{jint, jlong};
     use jni::JNIEnv;
     use log::info;
