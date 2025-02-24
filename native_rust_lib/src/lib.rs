@@ -2,11 +2,13 @@ mod builder;
 mod error;
 mod network;
 mod parser;
+mod signatures;
 mod transparent_input;
 mod transparent_output;
 
 pub use error::ZcashError;
 pub use network::NetworkType;
+pub use signatures::TransactionSignatures;
 pub use transparent_input::TransparentInputInfo;
 pub use transparent_output::TransparentOutputInfo;
 pub type Amount = u64;
