@@ -72,7 +72,7 @@ impl TryFrom<u32> for ZcashError {
             // Handle the special case for `Unknown`
             999 => Ok(ZcashError::Unknown),
             // Use `transmute` for values in [0..23]
-            x if x <= 26 => Ok(unsafe { transmute(x) }),
+            x if x <= 27 => Ok(unsafe { transmute(x) }),
             // Return an error for all other values
             _ => Err(()),
         }
