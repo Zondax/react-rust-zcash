@@ -14,13 +14,16 @@ log = "0.4"
 
 rand_core = "0.6.4"
 snafu = { version = "0.8.2" }
-
+secp256k1 = { version = "0.29" }
 zcash_primitives = { git = "https://github.com/Zondax/librustzcash", rev = "ce278848fef35903db46c3dced41658e90bbeb3c", features = [
     "transparent-inputs",
 ], package = "zcash_primitives" }
 
 ledger-chain-builder = { git = "https://github.com/Zondax/ledger-zcash-tools", tag = "v2.0.0", package = "ledger-zcash-chain-builder" }
 ledger-app-builder = { git = "https://github.com/Zondax/ledger-zcash-tools", tag = "v2.0.0", package = "ledger-zcash-app-builder" }
+once_cell = "1.20.3"
+hex = "0.4.3"
+thiserror = "2.0.11"
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.13"

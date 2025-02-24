@@ -661,7 +661,7 @@ dependencies = [
  "combine",
  "jni-sys",
  "log",
- "thiserror",
+ "thiserror 1.0.69",
  "walkdir",
  "windows-sys 0.45.0",
 ]
@@ -738,7 +738,7 @@ dependencies = [
  "log",
  "serde",
  "sha2 0.10.8",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "zx-bip44",
 ]
@@ -767,7 +767,7 @@ dependencies = [
  "secp256k1 0.29.1",
  "serde",
  "sha2 0.10.8",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "zcash_primitives",
  "zx-bip44",
@@ -799,7 +799,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "sha2 0.10.8",
- "thiserror",
+ "thiserror 1.0.69",
  "tokio",
  "zcash_note_encryption 0.1.0 (git+https://github.com/Zondax/librustzcash?rev=ce278848fef35903db46c3dced41658e90bbeb3c)",
  "zcash_primitives",
@@ -815,7 +815,7 @@ dependencies = [
  "async-trait",
  "ledger-transport",
  "serde",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -875,12 +875,16 @@ name = "native_rust_lib"
 version = "0.1.0"
 dependencies = [
  "android_logger",
+ "hex",
  "jni",
  "ledger-zcash-app-builder",
  "ledger-zcash-chain-builder",
  "log",
+ "once_cell",
  "rand_core",
+ "secp256k1 0.29.1",
  "snafu",
+ "thiserror 2.0.11",
  "zcash_primitives",
 ]
 
@@ -1140,7 +1144,7 @@ dependencies = [
  "pasta_curves",
  "rand_core",
  "serde",
- "thiserror",
+ "thiserror 1.0.69",
  "zeroize",
 ]
 
@@ -1152,7 +1156,7 @@ checksum = "ba009ff324d1fc1b900bd1fdb31564febe58a8ccc8a6fdbb93b543d33b13ca43"
 dependencies = [
  "getrandom",
  "libredox",
- "thiserror",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -1371,7 +1375,16 @@ version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 1.0.69",
+]
+
+[[package]]
+name = "thiserror"
+version = "2.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d452f284b73e6d76dd36758a0c8684b1d5be31f92b89d07fd5822175732206fc"
+dependencies = [
+ "thiserror-impl 2.0.11",
 ]
 
 [[package]]
@@ -1379,6 +1392,17 @@ name = "thiserror-impl"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "2.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26afc1baea8a989337eeb52b6e72a039780ce45c3edfcc9c5b9d112feeb173c2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1861,5 +1885,5 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ed17b569d1ea6903d5dc061602c6dc45f816cd0171d67d3b40fc1f6caf1ade0"
 dependencies = [
  "byteorder",
- "thiserror",
+ "thiserror 1.0.69",
 ]
