@@ -1,14 +1,13 @@
-use ledger_chain_builder::hsmauth::MixedAuthorization;
-use ledger_chain_builder::{hsmauth, txbuilder};
+use ledger_chain_builder::{hsmauth, txbuilder, txprover};
 use once_cell::sync::Lazy;
 use rand_core::OsRng;
 use std::collections::HashMap;
+use std::ffi::{c_char, CStr};
+use std::path::Path;
 use std::sync::Mutex;
-use zcash_primitives::consensus::{MainNetwork, TestNetwork};
-use zcash_primitives::transaction::{
-    components::{sapling, transparent, TxOut},
-    Authorization,
-};
+use zcash_primitives::consensus::{self, MainNetwork, TestNetwork};
+use zcash_primitives::transaction::components::{sapling, transparent, TxOut};
+use zcash_primitives::transaction::TxVersion;
 
 use crate::{
     NetworkType, TransactionSignatures, TransparentInputInfo, TransparentOutputInfo, ZcashError,
@@ -122,7 +121,9 @@ pub extern "C" fn add_transparent_input(builder_id: u64, input: TransparentInput
             NetworkBuilder::Testnet(builder) => {
                 builder.add_transparent_input(pubkey, outpoint, tx_out)
             }
-            _ => return ZcashError::AlreadyAuthorized as u32,
+            NetworkBuilder::TestnetAuthorized(..) | NetworkBuilder::MainnetAuthorized(..) => {
+                return ZcashError::AlreadyAuthorized as u32
+            }
         };
 
         match result {
@@ -263,6 +264,154 @@ pub extern "C" fn add_signatures(builder_id: u64, signatures: TransactionSignatu
         };
 
         result as u32
+    } else {
+        ZcashError::BuilderNotFound as u32
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn build_transaction(
+    builder_id: u64,
+    spend_path: *const c_char,
+    output_path: *const c_char,
+    tx_version: u8,
+    result_ptr: *mut *mut u8,
+    result_len: *mut usize,
+) -> u32 {
+    // Validate input pointers
+    if spend_path.is_null() || output_path.is_null() {
+        return ZcashError::InvalidArgument as u32;
+    }
+
+    // Convert C strings to Rust strings
+    let spend_path_str = unsafe {
+        match CStr::from_ptr(spend_path).to_str() {
+            Ok(s) => s,
+            Err(_) => return ZcashError::InvalidArgument as u32,
+        }
+    };
+
+    let output_path_str = unsafe {
+        match CStr::from_ptr(output_path).to_str() {
+            Ok(s) => s,
+            Err(_) => return ZcashError::InvalidArgument as u32,
+        }
+    };
+
+    // Parse tx_version
+    let tx_ver = match tx_version {
+        4 => Some(TxVersion::Sapling),
+        5 => Some(TxVersion::Zip225),
+        _ => None,
+    };
+
+    let mut builders = BUILDERS.lock().unwrap();
+
+    if let Some(builder) = builders.remove(&builder_id) {
+        // Handle based on builder state
+        let result = match builder {
+            // Only unauthorized builders can be built
+            NetworkBuilder::Mainnet(mut builder) => {
+                let mut prover = txprover::LocalTxProver::new(
+                    Path::new(spend_path_str),
+                    Path::new(output_path_str),
+                );
+
+                let build_result = builder.build(consensus::BranchId::Nu6, tx_ver, &mut prover);
+
+                match build_result {
+                    Ok(hsm_data) => {
+                        // Put the builder back in the map
+                        builders.insert(builder_id, NetworkBuilder::Mainnet(builder));
+
+                        // Get the bytes from HsmTxData
+                        match hsm_data.to_hsm_bytes() {
+                            Ok(bytes) => {
+                                unsafe {
+                                    // Allocate memory for the result
+                                    let buffer =
+                                        libc::malloc(bytes.len() * std::mem::size_of::<u8>())
+                                            as *mut u8;
+                                    if buffer.is_null() {
+                                        return ZcashError::ReadWriteError as u32;
+                                    }
+
+                                    // Copy the transaction bytes to the allocated memory
+                                    std::ptr::copy_nonoverlapping(
+                                        bytes.as_ptr(),
+                                        buffer,
+                                        bytes.len(),
+                                    );
+
+                                    // Set output parameters
+                                    *result_ptr = buffer;
+                                    *result_len = bytes.len();
+                                }
+                                ZcashError::Success as u32
+                            }
+                            Err(_) => ZcashError::ReadWriteError as u32,
+                        }
+                    }
+                    Err(e) => {
+                        let error = ZcashError::from(e);
+                        error as u32
+                    }
+                }
+            }
+            NetworkBuilder::Testnet(mut builder) => {
+                let mut prover = txprover::LocalTxProver::new(
+                    Path::new(spend_path_str),
+                    Path::new(output_path_str),
+                );
+
+                let build_result = builder.build(consensus::BranchId::Nu6, tx_ver, &mut prover);
+
+                match build_result {
+                    Ok(hsm_data) => {
+                        // Put the builder back in the map
+                        builders.insert(builder_id, NetworkBuilder::Testnet(builder));
+
+                        // Get the bytes from HsmTxData
+                        match hsm_data.to_hsm_bytes() {
+                            Ok(bytes) => {
+                                unsafe {
+                                    // Allocate memory for the result
+                                    let buffer =
+                                        libc::malloc(bytes.len() * std::mem::size_of::<u8>())
+                                            as *mut u8;
+                                    if buffer.is_null() {
+                                        return ZcashError::ReadWriteError as u32;
+                                    }
+
+                                    // Copy the transaction bytes to the allocated memory
+                                    std::ptr::copy_nonoverlapping(
+                                        bytes.as_ptr(),
+                                        buffer,
+                                        bytes.len(),
+                                    );
+
+                                    // Set output parameters
+                                    *result_ptr = buffer;
+                                    *result_len = bytes.len();
+                                }
+                                ZcashError::Success as u32
+                            }
+                            Err(_) => ZcashError::ReadWriteError as u32,
+                        }
+                    }
+                    Err(e) => {
+                        let error = ZcashError::from(e);
+                        error as u32
+                    }
+                }
+            }
+            // Already authorized builders can't be built
+            NetworkBuilder::MainnetAuthorized(_) | NetworkBuilder::TestnetAuthorized(_) => {
+                return ZcashError::AlreadyAuthorized as u32;
+            }
+        };
+
+        result
     } else {
         ZcashError::BuilderNotFound as u32
     }
