@@ -1,4 +1,5 @@
 use ledger_chain_builder::{hsmauth, txbuilder, txprover};
+use log::{error, info};
 use once_cell::sync::Lazy;
 use rand_core::OsRng;
 use std::collections::HashMap;
@@ -278,8 +279,10 @@ pub extern "C" fn build_transaction(
     result_ptr: *mut *mut u8,
     result_len: *mut usize,
 ) -> u32 {
+    info!("Building transaction for builder: {}", builder_id);
     // Validate input pointers
     if spend_path.is_null() || output_path.is_null() {
+        error!("Build parameters are null")
         return ZcashError::InvalidArgument as u32;
     }
 
@@ -297,6 +300,9 @@ pub extern "C" fn build_transaction(
             Err(_) => return ZcashError::InvalidArgument as u32,
         }
     };
+    info!("spend path: {}", spend_path_str);
+    info!("output path: {}", output_path_str);
+    info!("tx version: {}", tx_version);
 
     // Parse tx_version
     let tx_ver = match tx_version {
@@ -316,6 +322,7 @@ pub extern "C" fn build_transaction(
                     Path::new(spend_path_str),
                     Path::new(output_path_str),
                 );
+                info!("building mainnet");
 
                 let build_result = builder.build(consensus::BranchId::Nu6, tx_ver, &mut prover);
 
@@ -347,12 +354,17 @@ pub extern "C" fn build_transaction(
                                     *result_ptr = buffer;
                                     *result_len = bytes.len();
                                 }
+                                info!("success");
                                 ZcashError::Success as u32
                             }
-                            Err(_) => ZcashError::ReadWriteError as u32,
+                            Err(e) => {
+                                error!("Error: {:?}", e);
+                                ZcashError::ReadWriteError as u32
+                            }
                         }
                     }
                     Err(e) => {
+                        error!("Error: {:?}", e);
                         let error = ZcashError::from(e);
                         error as u32
                     }

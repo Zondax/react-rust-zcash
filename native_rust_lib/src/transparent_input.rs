@@ -81,6 +81,7 @@ use jni::{
 #[cfg(target_os = "android")]
 impl TransparentInputInfo {
     pub unsafe fn from_java(env: &mut JNIEnv, obj: JObject) -> Result<Self, ZcashError> {
+        use log::{error, info};
         // Get outp field
         let outp_field = match env.get_field_id(
             env.get_object_class(&obj).unwrap(),
@@ -88,13 +89,19 @@ impl TransparentInputInfo {
             "Ljava/lang/String;",
         ) {
             Ok(id) => id,
-            Err(_) => return Err(ZcashError::InvalidArgument),
+            Err(_) => {
+                error!("Error getting outp field");
+                return Err(ZcashError::InvalidArgument);
+            }
         };
 
         // Use ReturnType::Object for string fields
         let outp_value = match env.get_field_unchecked(&obj, outp_field, ReturnType::Object) {
             Ok(value) => value.l().unwrap(),
-            Err(_) => return Err(ZcashError::InvalidArgument),
+            Err(_) => {
+                error!("Error getting outp field");
+                return Err(ZcashError::InvalidArgument);
+            }
         };
 
         let outp_jstring = JString::from(outp_value);

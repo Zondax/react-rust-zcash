@@ -18,7 +18,7 @@ use log::{error, info, LevelFilter};
 use crate::calculate_fee;
 use std::ptr;
 
-fn init_logger() {
+pub(crate) fn init_logger() {
     android_logger::init_once(
         Config::default()
             .with_max_level(LevelFilter::Info)
@@ -237,6 +237,8 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_buildTransa
         &mut result_ptr,
         &mut result_len,
     );
+    info!("Transaction build result: {}", result);
+    info!("Transaction data length {}", result_len);
 
     if result == ZcashError::Success as u32 && !result_ptr.is_null() {
         let byte_array = env.new_byte_array(result_len as jint).unwrap();
