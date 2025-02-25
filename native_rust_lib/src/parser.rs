@@ -1,9 +1,6 @@
 use std::str::FromStr;
 
-use zcash_primitives::{
-    legacy::Script,
-    transaction::components::{Amount, OutPoint},
-};
+use zcash_primitives::{legacy::Script, transaction::components::OutPoint};
 
 use crate::ZcashError;
 // Helper functions to parse the data using the same logic as deserializers
@@ -22,8 +19,4 @@ pub(crate) fn parse_script(hex_str: &str) -> Result<Script, ZcashError> {
     let bytes = hex::decode(hex_str).map_err(|_| ZcashError::InvalidArgument)?;
 
     Script::read(&bytes[..]).map_err(|_| ZcashError::InvalidScript)
-}
-
-pub(crate) fn parse_amount(value: u64) -> Result<Amount, ZcashError> {
-    Amount::from_u64(value).map_err(|_| ZcashError::InvalidAmount)
 }
