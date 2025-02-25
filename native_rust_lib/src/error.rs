@@ -60,6 +60,10 @@ pub enum ZcashError {
     InvalidOutpoint = 26,
     #[error("Invalid script")]
     InvalidScript = 27,
+    #[error("Invalid spend path")]
+    InvalidSpendPath = 28,
+    #[error("Invalid output path")]
+    InvalidOutputPath = 29,
     #[error("Unknown error")]
     Unknown = 999,
 }
@@ -72,7 +76,7 @@ impl TryFrom<u32> for ZcashError {
             // Handle the special case for `Unknown`
             999 => Ok(ZcashError::Unknown),
             // Use `transmute` for values in [0..23]
-            x if x <= 27 => Ok(unsafe { transmute(x) }),
+            x if x <= 29 => Ok(unsafe { transmute(x) }),
             // Return an error for all other values
             _ => Err(()),
         }
@@ -105,5 +109,12 @@ impl From<ledger_chain_builder::errors::Error> for ZcashError {
             ledger_chain_builder::errors::Error::Unauthorized => Self::Unauthorized,
             ledger_chain_builder::errors::Error::UnknownAuthorization => Self::UnknownAuthorization,
         }
+    }
+}
+
+pub(crate) fn get_error_description(code: u32) -> String {
+    match ZcashError::try_from(code) {
+        Ok(err) => err.to_string(),
+        Err(_) => "Unknown error".to_owned(),
     }
 }
