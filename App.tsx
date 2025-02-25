@@ -18,14 +18,14 @@ import {
   buildTransaction,
   getErrorDescription,
 } from "./modules/my-rust-module";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function App() {
   // Transaction fee calculator states
-  const [nTxin, setNTxin] = useState("");
-  const [nTxout, setNTxout] = useState("");
-  const [nSpend, setNSpend] = useState("");
-  const [nSout, setNSout] = useState("");
+  const [nTxin, setNTxin] = useState("1"); // Default to 1 transparent input
+  const [nTxout, setNTxout] = useState("1"); // Default to 1 transparent output
+  const [nSpend, setNSpend] = useState("0"); // Default to 0 shielded spends
+  const [nSout, setNSout] = useState("0"); // Default to 0 shielded outputs
   const [calculatedFee, setCalculatedFee] = useState(null);
   const [error, setError] = useState(null);
 
@@ -34,23 +34,24 @@ export default function App() {
   const [networkType, setNetworkType] = useState("0"); // 0 for mainnet
   const [currentScreen, setCurrentScreen] = useState("feeCalculator");
 
+  // Default values for inputs and outputs
+  const DEFAULT_INPUT = {
+    outp: "000000000000000000000000000000000000000000000000000000000000000000000000",
+    pk: "031f6d238009787c20d5d7becb6b6ad54529fc0a3fd35088e85c2c3966bfec050e",
+    address: "1976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac",
+    value: "50000",
+  };
+
+  const DEFAULT_OUTPUT = {
+    address: "1976a914000000000000000000000000000000000000000088ac",
+    value: "10000",
+  };
+
   // Transaction inputs states
-  const [inputs, setInputs] = useState([
-    {
-      outp: "",
-      pk: "",
-      address: "",
-      value: "",
-    },
-  ]);
+  const [inputs, setInputs] = useState([{ ...DEFAULT_INPUT }]);
 
   // Transaction outputs states
-  const [outputs, setOutputs] = useState([
-    {
-      address: "",
-      value: "",
-    },
-  ]);
+  const [outputs, setOutputs] = useState([{ ...DEFAULT_OUTPUT }]);
 
   // Transaction build result
   const [txResult, setTxResult] = useState(null);
@@ -60,13 +61,18 @@ export default function App() {
   const OUTPUT_PATH = "/path/to/output/params"; // Hardcoded path
   const TX_VERSION = 5; // Default transaction version for Zcash
 
+  // Calculate fee on initial load
+  useEffect(() => {
+    handleCalculateFee();
+  }, []);
+
   // Calculate fee handler
   const handleCalculateFee = async () => {
     try {
       // Validate all inputs for empty ones we default to 0
       const inputs = {
-        nTxin: nTxin ? parseInt(nTxin, 10) : 0,
-        nTxout: nTxout ? parseInt(nTxout, 10) : 0,
+        nTxin: nTxin ? parseInt(nTxin, 10) : 1,
+        nTxout: nTxout ? parseInt(nTxout, 10) : 1,
         nSpend: nSpend ? parseInt(nSpend, 10) : 0,
         nSout: nSout ? parseInt(nSout, 10) : 0,
       };
@@ -132,12 +138,12 @@ export default function App() {
 
   // Add input field handler
   const addInputField = () => {
-    setInputs([...inputs, { outp: "", pk: "", address: "", value: "" }]);
+    setInputs([...inputs, { ...DEFAULT_INPUT }]);
   };
 
   // Add output field handler
   const addOutputField = () => {
-    setOutputs([...outputs, { address: "", value: "" }]);
+    setOutputs([...outputs, { ...DEFAULT_OUTPUT }]);
   };
 
   // Update input field handler
@@ -184,24 +190,15 @@ export default function App() {
       for (let i = 0; i < inputs.length; i++) {
         const input = inputs[i];
 
-        // Validate input
-        if (!input.outp || !input.pk || !input.address || !input.value) {
-          setError(`Input #${i + 1} has missing fields`);
-          return;
-        }
+        // Use defaults if fields are empty
+        const inputData = {
+          outp: input.outp || DEFAULT_INPUT.outp,
+          pk: input.pk || DEFAULT_INPUT.pk,
+          address: input.address || DEFAULT_INPUT.address,
+          value: parseInt(input.value || DEFAULT_INPUT.value, 10),
+        };
 
-        const value = parseInt(input.value, 10);
-        if (isNaN(value) || value <= 0) {
-          setError(`Input #${i + 1} has invalid value`);
-          return;
-        }
-
-        const result = await addTransparentInput(builderId, {
-          outp: input.outp,
-          pk: input.pk,
-          address: input.address,
-          value: value,
-        });
+        const result = await addTransparentInput(builderId, inputData);
 
         if (result !== 0) {
           // 0 is ZcashError::Success
@@ -215,22 +212,13 @@ export default function App() {
       for (let i = 0; i < outputs.length; i++) {
         const output = outputs[i];
 
-        // Validate output
-        if (!output.address || !output.value) {
-          setError(`Output #${i + 1} has missing fields`);
-          return;
-        }
+        // Use defaults if fields are empty
+        const outputData = {
+          address: output.address || DEFAULT_OUTPUT.address,
+          value: parseInt(output.value || DEFAULT_OUTPUT.value, 10),
+        };
 
-        const value = parseInt(output.value, 10);
-        if (isNaN(value) || value <= 0) {
-          setError(`Output #${i + 1} has invalid value`);
-          return;
-        }
-
-        const result = await addTransparentOutput(builderId, {
-          address: output.address,
-          value: value,
-        });
+        const result = await addTransparentOutput(builderId, outputData);
 
         if (result !== 0) {
           // 0 is ZcashError::Success
@@ -256,12 +244,24 @@ export default function App() {
     }
 
     try {
-      const result = await buildTransaction(
-        builderId,
-        SPEND_PATH,
-        OUTPUT_PATH,
-        TX_VERSION,
-      );
+      setError("Building transaction... This may take a while.");
+
+      // Create a promise that rejects after a timeout
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(
+          () =>
+            reject(
+              new Error("Transaction building timed out after 30 seconds"),
+            ),
+          30000,
+        );
+      });
+
+      // Race the actual operation against the timeout
+      const result = await Promise.race([
+        buildTransaction(builderId, SPEND_PATH, OUTPUT_PATH, TX_VERSION),
+        timeoutPromise,
+      ]);
 
       setTxResult(result);
       setError(null);
@@ -279,13 +279,26 @@ export default function App() {
     } catch (err) {
       console.error("Error building transaction:", err);
       setError(err instanceof Error ? err.message : "Unknown error occurred");
+
+      // Try to clean up builder if it exists
+      if (builderId !== null) {
+        try {
+          await destroyBuilder(builderId);
+          setBuilderId(null);
+        } catch (e) {
+          console.error(
+            "Error destroying builder after transaction build failure:",
+            e,
+          );
+        }
+      }
     }
   };
 
   // Reset the form and go back to fee calculator
   const resetForm = () => {
-    setInputs([{ outp: "", pk: "", address: "", value: "" }]);
-    setOutputs([{ address: "", value: "" }]);
+    setInputs([{ ...DEFAULT_INPUT }]);
+    setOutputs([{ ...DEFAULT_OUTPUT }]);
     setTxResult(null);
     setCurrentScreen("feeCalculator");
   };

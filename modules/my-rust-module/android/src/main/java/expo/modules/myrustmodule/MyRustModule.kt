@@ -3,6 +3,8 @@ package expo.modules.myrustmodule
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import android.util.Log
+import java.io.File
+import java.io.IOException
 
 // JNI helper classes
 class TransparentInput(
@@ -128,21 +130,56 @@ class MyRustModule : Module() {
         }
         
         // Build transaction
-        AsyncFunction("buildTransaction") { builderId: Double, spendPath: String, outputPath: String, txVersion: Int ->
+        // Build transaction - Simple mock implementation
+        AsyncFunction("buildTransaction") { builderId: Double, _: String, _: String, txVersion: Int ->
             try {
                 Log.d("MyRustModule", "Building transaction with builder $builderId")
                 
+                // Get application context
+                val context = appContext.reactContext ?: throw Exception("No React context available")
+                // Get application context
+                
+                // Define paths to extracted files in the app's internal storage
+                val filesDir = context.filesDir
+                val spendPath = File(filesDir, "sapling-spend.params").absolutePath
+                val outputPath = File(filesDir, "sapling-output.params").absolutePath
+                
+                // Check if files exist in internal storage
+                val spendFile = File(spendPath)
+                val outputFile = File(outputPath)
+                
+                // If files don't exist, extract them from assets
+                if (!spendFile.exists()) {
+                    context.assets.open("zcash-params/sapling-spend.params").use { input ->
+                        File(spendPath).outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    Log.d("MyRustModule", "Extracted sapling-spend.params to $spendPath")
+                }
+                
+                if (!outputFile.exists()) {
+                    context.assets.open("zcash-params/sapling-output.params").use { input ->
+                        File(outputPath).outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    Log.d("MyRustModule", "Extracted sapling-output.params to $outputPath")
+                }
+                
+                // Now call the native method with the extracted file paths
+                Log.d("MyRustModule", "Calling native buildTransaction with paths: $spendPath, $outputPath")
                 val txBytes = buildTransaction(builderId.toLong(), spendPath, outputPath, txVersion)
                 val hexString = txBytes.joinToString("") { "%02x".format(it) }
                 
-                Log.d("MyRustModule", "Transaction built successfully, size: ${txBytes.size} bytes")
+                Log.d("MyRustModule", "Transaction built successfully, size: ${hexString.length / 2} bytes")
                 hexString
             } catch (e: Exception) {
                 Log.e("MyRustModule", "Error building transaction", e)
                 throw e
             }
         }
-        
+
         // Get error description
         AsyncFunction("getErrorDescription") { errorCode: Int ->
             try {
