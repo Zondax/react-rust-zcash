@@ -282,7 +282,7 @@ pub extern "C" fn build_transaction(
     info!("Building transaction for builder: {}", builder_id);
     // Validate input pointers
     if spend_path.is_null() || output_path.is_null() {
-        error!("Build parameters are null")
+        error!("***Build parameters are null");
         return ZcashError::InvalidArgument as u32;
     }
 
@@ -300,9 +300,32 @@ pub extern "C" fn build_transaction(
             Err(_) => return ZcashError::InvalidArgument as u32,
         }
     };
-    info!("spend path: {}", spend_path_str);
-    info!("output path: {}", output_path_str);
-    info!("tx version: {}", tx_version);
+    info!("MyRustModule: spend path: {}", spend_path_str);
+    info!("MyRustModule: output path: {}", output_path_str);
+
+    match std::fs::metadata(spend_path_str) {
+        Ok(meta) => {
+            info!(
+                "MyRustModule: File exists: size = {} bytes, readonly = {}",
+                meta.len(),
+                meta.permissions().readonly()
+            );
+        }
+        Err(e) => {
+            error!("Error accessing file: {}: {}", spend_path_str, e);
+            return ZcashError::InvalidArgument as u32;
+        }
+    }
+
+    // Try to open the file explicitly to check permissions
+    match std::fs::File::open(spend_path_str) {
+        Ok(_) => info!("File can be opened successfully"),
+        Err(e) => {
+            error!("Cannot open file: {}: {}", spend_path_str, e);
+            return ZcashError::InvalidArgument as u32;
+        }
+    }
+    info!("MyRustModule: tx version: {}", tx_version);
 
     // Parse tx_version
     let tx_ver = match tx_version {
@@ -314,20 +337,23 @@ pub extern "C" fn build_transaction(
     let mut builders = BUILDERS.lock().unwrap();
 
     if let Some(builder) = builders.remove(&builder_id) {
+        info!("Got builder from list");
         // Handle based on builder state
         let result = match builder {
             // Only unauthorized builders can be built
             NetworkBuilder::Mainnet(mut builder) => {
+                info!("building mainnet");
                 let mut prover = txprover::LocalTxProver::new(
                     Path::new(spend_path_str),
                     Path::new(output_path_str),
                 );
-                info!("building mainnet");
+                info!("prover created");
 
                 let build_result = builder.build(consensus::BranchId::Nu6, tx_ver, &mut prover);
 
                 match build_result {
                     Ok(hsm_data) => {
+                        info!("hsm_data OK");
                         // Put the builder back in the map
                         builders.insert(builder_id, NetworkBuilder::Mainnet(builder));
 
@@ -336,10 +362,15 @@ pub extern "C" fn build_transaction(
                             Ok(bytes) => {
                                 unsafe {
                                     // Allocate memory for the result
+                                    info!("allocating memory");
                                     let buffer =
                                         libc::malloc(bytes.len() * std::mem::size_of::<u8>())
                                             as *mut u8;
                                     if buffer.is_null() {
+                                        error!(
+                                            "buffer is null - could not allocate: {}",
+                                            bytes.len()
+                                        );
                                         return ZcashError::ReadWriteError as u32;
                                     }
 
@@ -371,6 +402,7 @@ pub extern "C" fn build_transaction(
                 }
             }
             NetworkBuilder::Testnet(mut builder) => {
+                info!("building testnet");
                 let mut prover = txprover::LocalTxProver::new(
                     Path::new(spend_path_str),
                     Path::new(output_path_str),
@@ -419,6 +451,7 @@ pub extern "C" fn build_transaction(
             }
             // Already authorized builders can't be built
             NetworkBuilder::MainnetAuthorized(_) | NetworkBuilder::TestnetAuthorized(_) => {
+                error!("Already authorized");
                 return ZcashError::AlreadyAuthorized as u32;
             }
         };

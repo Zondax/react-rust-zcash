@@ -221,13 +221,18 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_buildTransa
     tx_version: jint,
 ) -> jbyteArray {
     init_logger();
-    info!("Building transaction for builder: {}", builder_id);
+    info!(
+        "MyRustModule: Building transaction for builder: {}",
+        builder_id
+    );
 
     let spend_path_ptr = env.get_string(&spend_path).unwrap().as_ptr();
     let output_path_ptr = env.get_string(&output_path).unwrap().as_ptr();
+    info!("MyRustModule:got path pointers");
 
     let mut result_ptr: *mut u8 = ptr::null_mut();
     let mut result_len: usize = 0;
+    info!("MyRustModule:Calling rust-native build_transaction");
 
     let result = build_transaction(
         builder_id as u64,
@@ -237,8 +242,8 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_buildTransa
         &mut result_ptr,
         &mut result_len,
     );
-    info!("Transaction build result: {}", result);
-    info!("Transaction data length {}", result_len);
+    info!("MyRustModule:Transaction build result: {}", result);
+    info!("MyRustModule:Transaction data length {}", result_len);
 
     if result == ZcashError::Success as u32 && !result_ptr.is_null() {
         let byte_array = env.new_byte_array(result_len as jint).unwrap();
