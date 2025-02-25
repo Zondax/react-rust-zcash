@@ -220,16 +220,28 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_buildTransa
     output_path: JString,
     tx_version: jint,
 ) -> jbyteArray {
+    use std::ffi::{c_char, CStr};
     init_logger();
     info!(
         "MyRustModule: Building transaction for builder: {}",
         builder_id
     );
 
-    let spend_path_ptr = env.get_string(&spend_path).unwrap().as_ptr();
-    let output_path_ptr = env.get_string(&output_path).unwrap().as_ptr();
-    info!("MyRustModule:got path pointers");
+    // Keep the JavaStr objects alive
+    let spend_path_jstr = env.get_string(&spend_path).unwrap();
+    let output_path_jstr = env.get_string(&output_path).unwrap();
 
+    // Print the extracted strings for debugging
+    let spend_path_str = CStr::from_ptr(spend_path_jstr.as_ptr()).to_str().unwrap();
+    let output_path_str = CStr::from_ptr(output_path_jstr.as_ptr()).to_str().unwrap();
+    info!("MyRustModule: Extracted spend path: {}", spend_path_str);
+    info!("MyRustModule: Extracted output path: {}", output_path_str);
+
+    // Use the pointers while the JavaStr objects are still alive
+    let spend_path_ptr = spend_path_jstr.as_ptr();
+    let output_path_ptr = output_path_jstr.as_ptr();
+
+    info!("MyRustModule:got path pointers");
     let mut result_ptr: *mut u8 = ptr::null_mut();
     let mut result_len: usize = 0;
     info!("MyRustModule:Calling rust-native build_transaction");
@@ -242,6 +254,7 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_buildTransa
         &mut result_ptr,
         &mut result_len,
     );
+
     info!("MyRustModule:Transaction build result: {}", result);
     info!("MyRustModule:Transaction data length {}", result_len);
 
@@ -253,15 +266,12 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_buildTransa
             std::slice::from_raw_parts(result_ptr as *const i8, result_len),
         )
         .unwrap();
-
         // Free the data allocated in build_transaction
         free_transaction_data(result_ptr);
-
         **byte_array
     } else {
         let error_msg = get_error_description(result);
         error!("Error destroying builder: {}", error_msg);
-
         **env.new_byte_array(0).unwrap()
     }
 }

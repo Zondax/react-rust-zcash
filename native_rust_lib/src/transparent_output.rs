@@ -11,6 +11,12 @@ pub struct TransparentOutputInfo {
 }
 
 impl TransparentOutputInfo {
+    pub fn from_raw(address: *const c_char, value: u64) -> Self {
+        Self { address, value }
+    }
+}
+
+impl TransparentOutputInfo {
     pub fn address(&self) -> Result<Script, ZcashError> {
         unsafe {
             let address_str = CStr::from_ptr(self.address)

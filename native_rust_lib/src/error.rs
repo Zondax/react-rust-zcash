@@ -64,6 +64,8 @@ pub enum ZcashError {
     InvalidSpendPath = 28,
     #[error("Invalid output path")]
     InvalidOutputPath = 29,
+    #[error("Internal error")]
+    InternalError = 30,
     #[error("Unknown error")]
     Unknown = 999,
 }
@@ -76,7 +78,7 @@ impl TryFrom<u32> for ZcashError {
             // Handle the special case for `Unknown`
             999 => Ok(ZcashError::Unknown),
             // Use `transmute` for values in [0..23]
-            x if x <= 29 => Ok(unsafe { transmute(x) }),
+            x if x <= 30 => Ok(unsafe { transmute(x) }),
             // Return an error for all other values
             _ => Err(()),
         }
