@@ -81,7 +81,7 @@ use jni::{
 #[cfg(target_os = "android")]
 impl TransparentInputInfo {
     pub unsafe fn from_java(env: &mut JNIEnv, obj: JObject) -> Result<Self, ZcashError> {
-        use log::{error, info};
+        use log::error;
         // Get outp field
         let outp_field = match env.get_field_id(
             env.get_object_class(&obj).unwrap(),
