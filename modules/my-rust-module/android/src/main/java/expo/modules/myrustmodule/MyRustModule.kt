@@ -19,6 +19,32 @@ class TransparentOutput(
     val value: Long
 )
 
+data class ToutData(
+    val address: String,        // Hex-encoded string representing a Script
+    val value: Long             // u64 value representing an Amount
+)
+
+data class SaplingInData(
+    val path: Int,              // Single u32 value
+    val address: String,        // Hex-encoded string representing a PaymentAddress
+    val value: Long             // u64 value representing an Amount
+)
+
+data class SaplingOutData(
+    val address: String,        // Hex-encoded string representing a PaymentAddress
+    val value: Long,            // u64 value representing an Amount
+    val memoType: Byte,         // Single byte value
+    val hasOvk: Boolean,        // Boolean indicating if ovk is present
+    val ovk: ByteArray? = null  // Optional byte array (32 bytes) representing an OutgoingViewingKey
+)
+
+data class InitData(
+    val tIn: List<TinData>,
+    val tOut: List<ToutData>,
+    val sSpend: List<SaplingInData>,
+    val sOutput: List<SaplingOutData>
+)
+
 class MyRustModule : Module() {
     companion object {
         init {
