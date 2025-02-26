@@ -1,5 +1,6 @@
 mod builder;
 mod error;
+mod init_data;
 pub(crate) mod memory;
 mod network;
 mod parser;
@@ -17,6 +18,7 @@ pub use builder::{
     create_builder, destroy_builder,
 };
 pub use error::ZcashError;
+pub use init_data::{CInitData, CSaplingInData, CSaplingOutData, CTinData, CToutData};
 pub use memory::free_transaction_data;
 pub use network::NetworkType;
 pub use signatures::TransactionSignatures;
