@@ -20,6 +20,11 @@ web-build/
 *intermediates
 *compileDebugKotlin
 *compileDebugKotlin
+*.jar
+*debug/
+/build/outputs
+modules/my-rust-module/android/build/
+
 
 
 
