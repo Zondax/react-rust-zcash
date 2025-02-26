@@ -15,6 +15,13 @@ web-build/
 *.p12
 *.key
 *.mobileprovision
+*.transforms
+*tmp
+*intermediates
+*compileDebugKotlin
+*compileDebugKotlin
+
+
 
 # Metro
 .metro-health-check*
