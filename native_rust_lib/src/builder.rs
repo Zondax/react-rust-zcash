@@ -4,7 +4,6 @@ use once_cell::sync::Lazy;
 use rand_core::OsRng;
 use std::collections::HashMap;
 use std::ffi::{c_char, CStr};
-use std::path::Path;
 use std::sync::Mutex;
 use zcash_primitives::consensus::{self, MainNetwork, TestNetwork};
 use zcash_primitives::transaction::components::{sapling, transparent, TxOut};
@@ -426,12 +425,87 @@ pub extern "C" fn build_transaction(
                 }
             }
             NetworkBuilder::Testnet(mut builder) => {
-                // Similar implementation for testnet
-                // ...
+                info!("building testnet");
 
-                // For now, just a placeholder to avoid leaving incomplete code
-                error!("Testnet implementation not completed");
-                ZcashError::InvalidArgument as u32
+                // Use from_bytes method with catch_unwind for safety
+                let prover_result = std::panic::catch_unwind(|| {
+                    info!("calling prover::from_bytes");
+                    txprover::LocalTxProver::from_bytes(&spend_params_bytes, &output_params_bytes)
+                });
+                info!("prover created");
+                println!("prover created");
+
+                let mut prover = match prover_result {
+                    Ok(prover) => {
+                        info!("prover created successfully");
+                        prover
+                    }
+                    Err(e) => {
+                        // Try to extract panic message
+                        let panic_msg = if let Some(s) = e.downcast_ref::<String>() {
+                            s.clone()
+                        } else if let Some(s) = e.downcast_ref::<&str>() {
+                            s.to_string()
+                        } else {
+                            "Unknown panic in prover creation".to_string()
+                        };
+
+                        error!("Prover creation failed with panic: {}", panic_msg);
+                        return ZcashError::InternalError as u32;
+                    }
+                };
+
+                let build_result = builder.build(consensus::BranchId::Nu6, tx_ver, &mut prover);
+
+                match build_result {
+                    Ok(hsm_data) => {
+                        info!("hsm_data OK");
+                        // Put the builder back in the map
+                        builders.insert(builder_id, NetworkBuilder::Testnet(builder));
+
+                        // Get the bytes from HsmTxData
+                        match hsm_data.to_hsm_bytes() {
+                            Ok(bytes) => {
+                                unsafe {
+                                    // Allocate memory for the result
+                                    info!("allocating memory");
+                                    let buffer =
+                                        libc::malloc(bytes.len() * std::mem::size_of::<u8>())
+                                            as *mut u8;
+                                    if buffer.is_null() {
+                                        error!(
+                                            "buffer is null - could not allocate: {}",
+                                            bytes.len()
+                                        );
+                                        return ZcashError::ReadWriteError as u32;
+                                    }
+
+                                    // Copy the transaction bytes to the allocated memory
+                                    std::ptr::copy_nonoverlapping(
+                                        bytes.as_ptr(),
+                                        buffer,
+                                        bytes.len(),
+                                    );
+
+                                    // Set output parameters
+                                    *result_ptr = buffer;
+                                    *result_len = bytes.len();
+                                }
+                                info!("success");
+                                ZcashError::Success as u32
+                            }
+                            Err(e) => {
+                                error!("Error: {:?}", e);
+                                ZcashError::ReadWriteError as u32
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("Error: {:?}", e);
+                        let error = ZcashError::from(e);
+                        error as u32
+                    }
+                }
             }
             // Already authorized builders can't be built
             NetworkBuilder::MainnetAuthorized(_) | NetworkBuilder::TestnetAuthorized(_) => {
