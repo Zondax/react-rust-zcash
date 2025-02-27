@@ -46,13 +46,13 @@ impl TransactionSignatures {
     }
 }
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", test))]
 use jni::{
     objects::{JObject, JObjectArray, JString},
     signature::ReturnType,
     JNIEnv,
 };
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", test))]
 impl TransactionSignatures {
     pub unsafe fn from_java(env: &mut JNIEnv, obj: JObject) -> Result<Self, ZcashError> {
         use std::ffi::CString;

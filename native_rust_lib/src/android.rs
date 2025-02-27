@@ -24,7 +24,7 @@ pub(crate) fn init_logger() {
     );
 }
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", test))]
 pub fn create_java_string(env: &JNIEnv, desc_str: &str) -> jstring {
     // Fix: Use into_raw() instead of into_inner()
     env.new_string(desc_str).unwrap().into_raw()

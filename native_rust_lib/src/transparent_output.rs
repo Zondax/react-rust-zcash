@@ -35,13 +35,13 @@ impl TransparentOutputInfo {
     }
 }
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", test))]
 use jni::{
     objects::{JObject, JString},
     signature::{Primitive, ReturnType},
     JNIEnv,
 };
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", test))]
 impl TransparentOutputInfo {
     pub unsafe fn from_java(env: &mut JNIEnv, obj: JObject) -> Result<Self, ZcashError> {
         // Get address field

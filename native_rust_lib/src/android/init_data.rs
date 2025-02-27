@@ -2,7 +2,7 @@ use crate::android::init_logger;
 use crate::memory::free_transaction_data;
 use crate::ZcashError;
 use jni::{
-    objects::{JByteArray, JClass, JIntArray, JObject, JString, JValue},
+    objects::{JByteArray, JClass, JIntArray, JLongArray, JObject, JString, JValue},
     sys::{jbyteArray, jint, jsize},
     JNIEnv,
 };
@@ -15,8 +15,8 @@ use crate::init_data::{
 };
 
 // We can not move each conversion section to its own Type::from_java
-// due to lifetimes issues, so we parse the java object directly here and compute
-// the init_data as well
+// due to lifetimes issues, so we parse the full java object into CInitData type directly here
+// and compute the init_data hash
 #[no_mangle]
 pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_getInitTxData(
     mut env: JNIEnv,
@@ -136,7 +136,8 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_getInitTxDa
         }
 
         // Get the 'path' field as a Java int array
-        let path_obj = match env.get_field(&item, "path", "[I") {
+        // use [J to tell values are longs
+        let path_obj = match env.get_field(&item, "path", "[J") {
             Ok(field) => match field.l() {
                 Ok(obj) => obj,
                 Err(_) => continue,
@@ -149,7 +150,7 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_getInitTxDa
         }
 
         // Cast to JIntArray so that it implements AsJArrayRaw
-        let path_array = JIntArray::from(path_obj);
+        let path_array = JLongArray::from(path_obj);
 
         let path_len = match env.get_array_length(&path_array) {
             Ok(len) => len as usize,
@@ -160,8 +161,11 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_getInitTxDa
             continue;
         }
 
-        let mut path_elements = vec![0i32; 5];
-        if let Err(_) = env.get_int_array_region(&path_array, 0, &mut path_elements) {
+        let mut path_elements = vec![0i64; 5];
+        if env
+            .get_long_array_region(&path_array, 0, &mut path_elements)
+            .is_err()
+        {
             continue;
         }
 
@@ -298,7 +302,7 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_getInitTxDa
         }
 
         // Get 'path' as a single int value
-        let path = match env.get_field(&item, "path", "I") {
+        let path = match env.get_field(&item, "path", "J") {
             Ok(field) => field.i().unwrap_or(0) as u32,
             Err(_) => continue,
         };
@@ -532,4 +536,340 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_getInitTxDa
 
     free_transaction_data(result_ptr);
     byte_array.into_raw()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use jni::{
+        objects::{JByteArray, JClass, JObject, JValue},
+        InitArgsBuilder, JNIEnv, JavaVM,
+    };
+
+    // extracted from: https://github.com/Zondax/ledger-zcash/blob/main/tests_zemu/tests/txs_advanced.test.ts#L734
+    const EXPECTED_INIT_BLOB: &str = "020200002c000080850000800500008000000000000000001976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac50c30000000000002c000080850000800500008000000000000000001976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac50c30000000000001976a914000000000000000000000000000000000000000088ac10270000000000001976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac8038010000000000";
+
+    #[test]
+    fn test_init_data_processing() {
+        // Prepare the path arrays (same for both inputs)
+        let path = [2147483692u32, 2147483781, 2147483653, 0, 0];
+        let path_storage = [path, path];
+
+        // Prepare address strings
+        let addr_tin =
+            CString::new("1976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac").unwrap();
+        let addr_tout1 =
+            CString::new("1976a914000000000000000000000000000000000000000088ac").unwrap();
+        let addr_tout2 =
+            CString::new("1976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac").unwrap();
+
+        let address_storage = [
+            addr_tin.clone(), // For first input
+            addr_tin,         // For second input
+            addr_tout1,       // For first output
+            addr_tout2,       // For second output
+        ];
+
+        // Create transparent input data
+        let t_in_vec = [
+            // First input
+            CTinData {
+                path: path_storage[0].as_ptr(),
+                path_len: 5,
+                address: address_storage[0].as_ptr(),
+                value: 50000,
+            },
+            // Second input
+            CTinData {
+                path: path_storage[1].as_ptr(),
+                path_len: 5,
+                address: address_storage[1].as_ptr(),
+                value: 50000,
+            },
+        ];
+
+        // Create transparent output data
+        let t_out_vec = [
+            // First output
+            CToutData {
+                address: address_storage[2].as_ptr(),
+                value: 10000,
+            },
+            // Second output
+            CToutData {
+                address: address_storage[3].as_ptr(),
+                value: 80000,
+            },
+        ];
+
+        // Create the CInitData struct
+        let init_data = CInitData {
+            t_in: t_in_vec.as_ptr(),
+            t_in_len: t_in_vec.len(),
+            t_out: t_out_vec.as_ptr(),
+            t_out_len: t_out_vec.len(),
+            s_spend: std::ptr::null(),
+            s_spend_len: 0,
+            s_output: std::ptr::null(),
+            s_output_len: 0,
+        };
+
+        // Prepare pointers for the result
+        let mut result_ptr: *mut u8 = std::ptr::null_mut();
+        let mut result_len: u64 = 0;
+
+        // Call the function under test
+        let error_code = get_inittx_data(init_data, &mut result_ptr, &mut result_len);
+
+        // Check for success
+        assert_eq!(
+            error_code,
+            ZcashError::Success as u32,
+            "get_inittx_data failed with error code {}",
+            error_code
+        );
+
+        // Verify the result
+        assert!(!result_ptr.is_null(), "Result pointer is null");
+        assert!(result_len > 0, "Result length is zero");
+
+        // Convert result to hex string for comparison
+        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, result_len as usize) };
+        let hex_result = hex::encode(result_bytes);
+
+        // Compare with expected result
+        assert_eq!(
+            hex_result, EXPECTED_INIT_BLOB,
+            "Result does not match expected data"
+        );
+
+        // Clean up
+        free_transaction_data(result_ptr);
+    }
+
+    #[test]
+    // #[ignore = "Requires JVM environment"]
+    fn test_get_init_tx_data() {
+        // Initialize JVM using InitArgsBuilder instead of InitArgs::default
+        let jvm_args = InitArgsBuilder::new()
+            .option("-Xcheck:jni")
+            .build()
+            .expect("Failed to build JVM args");
+
+        let jvm = JavaVM::new(jvm_args).expect("Failed to create JavaVM");
+
+        // Use a scope to manage lifetimes
+        let mut env = jvm
+            .attach_current_thread()
+            .expect("Failed to attach thread");
+
+        // We need to extract a raw JNIEnv for our C functions
+        let env_ptr = env.get_native_interface();
+
+        // Create a separate function to handle all the Java object creation
+        let init_obj = match create_test_data(&mut env) {
+            Ok(obj) => obj,
+            Err(e) => {
+                panic!("Failed to create test data: {:?}", e);
+            }
+        };
+
+        // Call the function under test
+        unsafe {
+            println!("Calling getInitTxData from Rust");
+
+            // Use the raw JNIEnv pointer for the C function
+            let result = Java_expo_modules_myrustmodule_MyRustModule_getInitTxData(
+                JNIEnv::from_raw(env_ptr).unwrap(),
+                // JClass::null().into_raw(),
+                JClass::from(JObject::null()),
+                init_obj,
+            );
+
+            // Verify the result (not null and contains valid data)
+            assert!(!result.is_null());
+
+            // Create a JByteArray from the raw pointer
+            let byte_array = JByteArray::from_raw(result);
+            let len = env.get_array_length(&byte_array).unwrap();
+            assert!(len > 0, "Result array should not be empty");
+
+            // Get the bytes from the array for comparison
+            let mut bytes = vec![0i8; len as usize];
+            env.get_byte_array_region(&byte_array, 0, &mut bytes)
+                .unwrap();
+
+            // Convert to unsigned bytes for comparison
+            let u_bytes: Vec<u8> = bytes.iter().map(|&b| b as u8).collect();
+
+            // Print as hex string for comparison
+            let hex_str = u_bytes
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<Vec<String>>()
+                .join("");
+
+            println!("Resulting hex: {}", hex_str);
+
+            // Compare with expected hex
+            assert_eq!(
+                hex_str, EXPECTED_INIT_BLOB,
+                "Hash output does not match expected value"
+            );
+
+            // Clean up
+            env.delete_local_ref(byte_array).unwrap();
+        }
+    }
+
+    // Helper function to create the test data with a clean approach
+    fn create_test_data<'a>(env: &'a mut JNIEnv) -> Result<JObject<'a>, jni::errors::Error> {
+        // Create an empty InitData object
+        let obj = env.new_object("expo/modules/myrustmodule/InitData", "()V", &[])?;
+
+        // Create ArrayLists for each data type
+        let t_in_list = env.new_object("java/util/ArrayList", "()V", &[])?;
+        let t_out_list = env.new_object("java/util/ArrayList", "()V", &[])?;
+        let s_spend_list = env.new_object("java/util/ArrayList", "()V", &[])?;
+        let s_output_list = env.new_object("java/util/ArrayList", "()V", &[])?;
+
+        // Create and add first transparent input
+        {
+            let tin_obj = env.new_object("expo/modules/myrustmodule/TinData", "()V", &[])?;
+
+            // Set path
+            let path = [2147483692, 2147483781, 2147483653, 0, 0];
+            let path_array = env.new_long_array(5)?;
+            env.set_long_array_region(&path_array, 0, &path)?;
+            env.set_field(&tin_obj, "path", "[J", JValue::Object(&path_array))?;
+
+            // Set address
+            let addr = "1976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac";
+            let jstr = env.new_string(addr)?;
+            env.set_field(
+                &tin_obj,
+                "address",
+                "Ljava/lang/String;",
+                JValue::Object(&jstr),
+            )?;
+
+            // Set value
+            env.set_field(&tin_obj, "value", "J", JValue::Long(50000))?;
+
+            // Add to list
+            env.call_method(
+                &t_in_list,
+                "add",
+                "(Ljava/lang/Object;)Z",
+                &[JValue::Object(&tin_obj)],
+            )?;
+        }
+
+        // Create and add second transparent input (same data)
+        {
+            let tin_obj = env.new_object("expo/modules/myrustmodule/TinData", "()V", &[])?;
+
+            // Set path
+            let path = [2147483692, 2147483781, 2147483653, 0, 0];
+            let path_array = env.new_long_array(5)?;
+            env.set_long_array_region(&path_array, 0, &path)?;
+            env.set_field(&tin_obj, "path", "[J", JValue::Object(&path_array))?;
+
+            // Set address
+            let addr = "1976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac";
+            let jstr = env.new_string(addr)?;
+            env.set_field(
+                &tin_obj,
+                "address",
+                "Ljava/lang/String;",
+                JValue::Object(&jstr),
+            )?;
+
+            // Set value
+            env.set_field(&tin_obj, "value", "J", JValue::Long(50000))?;
+
+            // Add to list
+            env.call_method(
+                &t_in_list,
+                "add",
+                "(Ljava/lang/Object;)Z",
+                &[JValue::Object(&tin_obj)],
+            )?;
+        }
+
+        // Create and add first transparent output
+        {
+            let tout_obj = env.new_object("expo/modules/myrustmodule/ToutData", "()V", &[])?;
+
+            // Set address
+            let addr = "1976a914000000000000000000000000000000000000000088ac";
+            let jstr = env.new_string(addr)?;
+            env.set_field(
+                &tout_obj,
+                "address",
+                "Ljava/lang/String;",
+                JValue::Object(&jstr),
+            )?;
+
+            // Set value
+            env.set_field(&tout_obj, "value", "J", JValue::Long(10000))?;
+
+            // Add to list
+            env.call_method(
+                &t_out_list,
+                "add",
+                "(Ljava/lang/Object;)Z",
+                &[JValue::Object(&tout_obj)],
+            )?;
+        }
+
+        // Create and add second transparent output
+        {
+            let tout_obj = env.new_object("expo/modules/myrustmodule/ToutData", "()V", &[])?;
+
+            // Set address
+            let addr = "1976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac";
+            let jstr = env.new_string(addr)?;
+            env.set_field(
+                &tout_obj,
+                "address",
+                "Ljava/lang/String;",
+                JValue::Object(&jstr),
+            )?;
+
+            // Set value
+            env.set_field(&tout_obj, "value", "J", JValue::Long(80000))?;
+
+            // Add to list
+            env.call_method(
+                &t_out_list,
+                "add",
+                "(Ljava/lang/Object;)Z",
+                &[JValue::Object(&tout_obj)],
+            )?;
+        }
+
+        // Set the lists as fields in the InitData object
+        env.set_field(&obj, "tIn", "Ljava/util/List;", JValue::Object(&t_in_list))?;
+        env.set_field(
+            &obj,
+            "tOut",
+            "Ljava/util/List;",
+            JValue::Object(&t_out_list),
+        )?;
+        env.set_field(
+            &obj,
+            "sSpend",
+            "Ljava/util/List;",
+            JValue::Object(&s_spend_list),
+        )?;
+        env.set_field(
+            &obj,
+            "sOutput",
+            "Ljava/util/List;",
+            JValue::Object(&s_output_list),
+        )?;
+
+        Ok(obj)
+    }
 }

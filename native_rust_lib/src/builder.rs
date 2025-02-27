@@ -739,7 +739,6 @@ mod test_builder {
         let mut builder_id: u64 = 0;
         let create_result = create_builder(fee, NetworkType::Mainnet as u8, &mut builder_id);
         assert_eq!(create_result, ZcashError::Success as u32);
-        println!("Created builder with ID: {}", builder_id);
 
         // Step 3: Add transparent input
         let outp_cstr = CString::new(
@@ -769,7 +768,7 @@ mod test_builder {
 
         let output = TransparentOutputInfo::from_raw(
             addr_out_cstr.as_ptr(),
-            10000, // 50000 - 10000 = 40000 (change/fee)
+            40000, // 50000 - 10000 = 40000 so no change required
         );
 
         let add_output_result = add_transparent_output(builder_id, output);
@@ -792,17 +791,8 @@ mod test_builder {
             }
         }
 
-        println!("Using spend params at: {:?}", spend_path);
-        println!("Using output params at: {:?}", output_path);
-
         assert!(spend_path.exists(), "Sapling spend params file not found");
         assert!(output_path.exists(), "Sapling output params file not found");
-
-        // Print file sizes to verify they are correct
-        let spend_size = std::fs::metadata(&spend_path).unwrap().len();
-        let output_size = std::fs::metadata(&output_path).unwrap().len();
-        println!("Spend params size: {} bytes", spend_size);
-        println!("Output params size: {} bytes", output_size);
 
         // Convert paths to C strings
         let spend_path_cstr = CString::new(spend_path.to_str().unwrap()).unwrap();
@@ -842,7 +832,6 @@ mod test_builder {
         // Clean up
         let destroy_result = destroy_builder(builder_id);
         assert_eq!(destroy_result, ZcashError::Success as u32);
-        println!("Destroyed builder");
     }
 
     // Helper functions

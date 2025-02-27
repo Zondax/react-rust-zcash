@@ -72,13 +72,13 @@ impl TransparentInputInfo {
     }
 }
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", test))]
 use jni::{
     objects::{JObject, JString},
     signature::{Primitive, ReturnType},
     JNIEnv,
 };
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", test))]
 impl TransparentInputInfo {
     pub unsafe fn from_java(env: &mut JNIEnv, obj: JObject) -> Result<Self, ZcashError> {
         use log::error;

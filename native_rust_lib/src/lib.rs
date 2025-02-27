@@ -8,9 +8,12 @@ mod signatures;
 mod transparent_input;
 mod transparent_output;
 
-#[cfg(target_os = "android")]
+// #[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", test))]
 mod android;
 #[cfg(target_os = "android")]
+pub use android::*;
+#[cfg(test)]
 pub use android::*;
 
 pub use builder::{

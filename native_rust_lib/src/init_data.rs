@@ -260,25 +260,41 @@ impl TryFrom<&CInitData> for InitData {
 
             // Convert C arrays to Rust vectors with error handling
             // let mut t_in = Vec::with_capacity(c_init_data.t_in_len);
-            let t_in = slice::from_raw_parts(c_init_data.t_in, c_init_data.t_in_len)
-                .iter()
-                .map(|c_tin| TinData::try_from(c_tin))
-                .collect::<Result<Vec<TinData>, ZcashError>>()?;
+            let t_in = if c_init_data.t_in_len > 0 {
+                slice::from_raw_parts(c_init_data.t_in, c_init_data.t_in_len)
+                    .iter()
+                    .map(|c_tin| TinData::try_from(c_tin))
+                    .collect::<Result<Vec<TinData>, ZcashError>>()?
+            } else {
+                Vec::new()
+            };
 
-            let t_out = slice::from_raw_parts(c_init_data.t_out, c_init_data.t_out_len)
-                .iter()
-                .map(|c_tout| ToutData::try_from(c_tout))
-                .collect::<Result<Vec<ToutData>, ZcashError>>()?;
+            let t_out = if c_init_data.t_out_len > 0 {
+                slice::from_raw_parts(c_init_data.t_out, c_init_data.t_out_len)
+                    .iter()
+                    .map(|c_tout| ToutData::try_from(c_tout))
+                    .collect::<Result<Vec<ToutData>, ZcashError>>()?
+            } else {
+                Vec::new()
+            };
 
-            let s_spend = slice::from_raw_parts(c_init_data.s_spend, c_init_data.s_spend_len)
-                .iter()
-                .map(|c_spend| SaplingInData::try_from(c_spend))
-                .collect::<Result<Vec<SaplingInData>, ZcashError>>()?;
+            let s_spend = if c_init_data.s_spend_len > 0 {
+                slice::from_raw_parts(c_init_data.s_spend, c_init_data.s_spend_len)
+                    .iter()
+                    .map(|c_spend| SaplingInData::try_from(c_spend))
+                    .collect::<Result<Vec<SaplingInData>, ZcashError>>()?
+            } else {
+                Vec::new()
+            };
 
-            let s_output = slice::from_raw_parts(c_init_data.s_output, c_init_data.s_output_len)
-                .iter()
-                .map(|c_output| SaplingOutData::try_from(c_output))
-                .collect::<Result<Vec<SaplingOutData>, ZcashError>>()?;
+            let s_output = if c_init_data.s_output_len > 0 {
+                slice::from_raw_parts(c_init_data.s_output, c_init_data.s_output_len)
+                    .iter()
+                    .map(|c_output| SaplingOutData::try_from(c_output))
+                    .collect::<Result<Vec<SaplingOutData>, ZcashError>>()?
+            } else {
+                Vec::new()
+            };
 
             Ok(InitData {
                 t_in,
