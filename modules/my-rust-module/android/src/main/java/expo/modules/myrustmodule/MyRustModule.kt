@@ -19,13 +19,40 @@ class TransparentOutput(
     val value: Long
 )
 
+data class TinData(
+    val path: LongArray,        // Array of 5 u32 values stored as Long in Kotlin
+    val address: String,        // Hex-encoded string representing a Script
+    val value: Long             // u64 value representing an Amount
+) {
+    // Override equals and hashCode since LongArray doesn't have built-in equality
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as TinData
+
+        if (!path.contentEquals(other.path)) return false
+        if (address != other.address) return false
+        if (value != other.value) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = path.contentHashCode()
+        result = 31 * result + address.hashCode()
+        result = 31 * result + value.hashCode()
+        return result
+    }
+}
+
 data class ToutData(
     val address: String,        // Hex-encoded string representing a Script
     val value: Long             // u64 value representing an Amount
 )
 
 data class SaplingInData(
-    val path: Int,              // Single u32 value
+    val path: Long,              // Single u32 value
     val address: String,        // Hex-encoded string representing a PaymentAddress
     val value: Long             // u64 value representing an Amount
 )
@@ -65,6 +92,7 @@ class MyRustModule : Module() {
     private external fun addTransparentOutput(builderId: Long, output: TransparentOutput): Int
     private external fun buildTransaction(builderId: Long, spendPath: String, outputPath: String, txVersion: Int): ByteArray
     private external fun getErrorDescription(errorCode: Int): String
+    private external fun getInitTxData(initData: InitData): ByteArray
     
     override fun definition() = ModuleDefinition {
         Name("MyRustModule")
@@ -202,6 +230,97 @@ class MyRustModule : Module() {
                 hexString
             } catch (e: Exception) {
                 Log.e("MyRustModule", "Error building transaction", e)
+                throw e
+            }
+        }
+        // Initialize transaction data
+        AsyncFunction("getInitTxData") { initData: Map<String, Any> ->
+            try {
+                Log.d("MyRustModule", "Calling getInitTxData with init data")
+                
+                // Parse transparent inputs
+                val tInList = (initData["tIn"] as? List<*>)?.mapNotNull { input ->
+                    (input as? Map<*, *>)?.let { inputMap ->
+                        // Parse path array (convert to LongArray)
+                        val pathList = (inputMap["path"] as? List<*>)?.mapNotNull { 
+                            (it as? Number)?.toLong() 
+                        } ?: listOf<Long>()
+                        
+                        // Create a fixed-size LongArray of 5 elements
+                        val pathArray = LongArray(5)
+                        for (i in 0 until minOf(pathList.size, 5)) {
+                            pathArray[i] = pathList[i]
+                        }
+                        
+                        TinData(
+                            path = pathArray,
+                            address = inputMap["address"] as? String ?: "",
+                            value = ((inputMap["value"] as? Number) ?: 0).toLong()
+                        )
+                    }
+                } ?: listOf()
+                
+                // Parse transparent outputs - unchanged
+                val tOutList = (initData["tOut"] as? List<*>)?.mapNotNull { output ->
+                    (output as? Map<*, *>)?.let { outputMap ->
+                        ToutData(
+                            address = outputMap["address"] as? String ?: "",
+                            value = ((outputMap["value"] as? Number) ?: 0).toLong()
+                        )
+                    }
+                } ?: listOf()
+                
+                // Parse Sapling inputs - unchanged
+               val sSpendList = (initData["sSpend"] as? List<*>)?.mapNotNull { spend ->
+                    (spend as? Map<*, *>)?.let { spendMap ->
+                        SaplingInData(
+                            path = (spendMap["path"] as? Number)?.toLong() ?: 0L,  // Convert to Long instead of Int
+                            address = spendMap["address"] as? String ?: "",
+                            value = ((spendMap["value"] as? Number) ?: 0).toLong()
+                        )
+                    }
+                } ?: listOf() 
+
+                // Parse Sapling outputs - unchanged
+                val sOutputList = (initData["sOutput"] as? List<*>)?.mapNotNull { output ->
+                    (output as? Map<*, *>)?.let { outputMap ->
+                        val hasOvk = outputMap["hasOvk"] as? Boolean ?: false
+                        var ovk: ByteArray? = null
+                        
+                        if (hasOvk) {
+                            // Parse OutgoingViewingKey if present
+                            (outputMap["ovk"] as? String)?.let { ovkString ->
+                                // Convert hex string to ByteArray if needed
+                                ovk = hexToByteArray(ovkString)
+                            }
+                        }
+                        
+                        SaplingOutData(
+                            address = outputMap["address"] as? String ?: "",
+                            value = ((outputMap["value"] as? Number) ?: 0).toLong(),
+                            memoType = ((outputMap["memoType"] as? Number) ?: 0).toByte(),
+                            hasOvk = hasOvk,
+                            ovk = ovk
+                        )
+                    }
+                } ?: listOf()
+                
+                // Create the InitData object
+                val initDataObj = InitData(
+                    tIn = tInList,
+                    tOut = tOutList,
+                    sSpend = sSpendList,
+                    sOutput = sOutputList
+                )
+                
+                // Call the native method
+                val dataBytes = getInitTxData(initDataObj)
+                val hexString = dataBytes.joinToString("") { "%02x".format(it) }
+                
+                Log.d("MyRustModule", "getInitTxData completed successfully, size: ${hexString.length / 2} bytes")
+                hexString
+            } catch (e: Exception) {
+                Log.e("MyRustModule", "Error in getInitTxData", e)
                 throw e
             }
         }
