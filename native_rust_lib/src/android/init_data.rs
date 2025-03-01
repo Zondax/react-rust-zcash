@@ -540,7 +540,10 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_getInitTxDa
 
 #[cfg(test)]
 mod tests {
+    use std::{fs::File, io::BufReader, path::Path};
+
     use super::*;
+    use crate::test::{TInput, TOutput, TestData, TxInitData};
     use jni::{
         objects::{JByteArray, JClass, JObject, JValue},
         InitArgsBuilder, JNIEnv, JavaVM,
@@ -549,102 +552,11 @@ mod tests {
     // extracted from: https://github.com/Zondax/ledger-zcash/blob/main/tests_zemu/tests/txs_advanced.test.ts#L734
     const EXPECTED_INIT_BLOB: &str = "020200002c000080850000800500008000000000000000001976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac50c30000000000002c000080850000800500008000000000000000001976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac50c30000000000001976a914000000000000000000000000000000000000000088ac10270000000000001976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac8038010000000000";
 
-    #[test]
-    fn test_init_data_processing() {
-        // Prepare the path arrays (same for both inputs)
-        let path = [2147483692u32, 2147483781, 2147483653, 0, 0];
-        let path_storage = [path, path];
-
-        // Prepare address strings
-        let addr_tin =
-            CString::new("1976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac").unwrap();
-        let addr_tout1 =
-            CString::new("1976a914000000000000000000000000000000000000000088ac").unwrap();
-        let addr_tout2 =
-            CString::new("1976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac").unwrap();
-
-        let address_storage = [
-            addr_tin.clone(), // For first input
-            addr_tin,         // For second input
-            addr_tout1,       // For first output
-            addr_tout2,       // For second output
-        ];
-
-        // Create transparent input data
-        let t_in_vec = [
-            // First input
-            CTinData {
-                path: path_storage[0].as_ptr(),
-                path_len: 5,
-                address: address_storage[0].as_ptr(),
-                value: 50000,
-            },
-            // Second input
-            CTinData {
-                path: path_storage[1].as_ptr(),
-                path_len: 5,
-                address: address_storage[1].as_ptr(),
-                value: 50000,
-            },
-        ];
-
-        // Create transparent output data
-        let t_out_vec = [
-            // First output
-            CToutData {
-                address: address_storage[2].as_ptr(),
-                value: 10000,
-            },
-            // Second output
-            CToutData {
-                address: address_storage[3].as_ptr(),
-                value: 80000,
-            },
-        ];
-
-        // Create the CInitData struct
-        let init_data = CInitData {
-            t_in: t_in_vec.as_ptr(),
-            t_in_len: t_in_vec.len(),
-            t_out: t_out_vec.as_ptr(),
-            t_out_len: t_out_vec.len(),
-            s_spend: std::ptr::null(),
-            s_spend_len: 0,
-            s_output: std::ptr::null(),
-            s_output_len: 0,
-        };
-
-        // Prepare pointers for the result
-        let mut result_ptr: *mut u8 = std::ptr::null_mut();
-        let mut result_len: u64 = 0;
-
-        // Call the function under test
-        let error_code = get_inittx_data(init_data, &mut result_ptr, &mut result_len);
-
-        // Check for success
-        assert_eq!(
-            error_code,
-            ZcashError::Success as u32,
-            "get_inittx_data failed with error code {}",
-            error_code
-        );
-
-        // Verify the result
-        assert!(!result_ptr.is_null(), "Result pointer is null");
-        assert!(result_len > 0, "Result length is zero");
-
-        // Convert result to hex string for comparison
-        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, result_len as usize) };
-        let hex_result = hex::encode(result_bytes);
-
-        // Compare with expected result
-        assert_eq!(
-            hex_result, EXPECTED_INIT_BLOB,
-            "Result does not match expected data"
-        );
-
-        // Clean up
-        free_transaction_data(result_ptr);
+    fn open_test_data() -> TestData {
+        let file_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/tx_2ti_2to.json");
+        let file = File::open(file_path).expect("Failed to open test.json file");
+        let reader = BufReader::new(file);
+        serde_json::from_reader(reader).expect("Failed to deserialize TestData from JSON")
     }
 
     #[test]
@@ -666,8 +578,10 @@ mod tests {
         // We need to extract a raw JNIEnv for our C functions
         let env_ptr = env.get_native_interface();
 
+        let test_data = open_test_data();
+
         // Create a separate function to handle all the Java object creation
-        let init_obj = match create_test_data(&mut env) {
+        let init_obj = match create_test_data(&mut env, &test_data) {
             Ok(obj) => obj,
             Err(e) => {
                 panic!("Failed to create test data: {:?}", e);
@@ -676,8 +590,6 @@ mod tests {
 
         // Call the function under test
         unsafe {
-            println!("Calling getInitTxData from Rust");
-
             // Use the raw JNIEnv pointer for the C function
             let result = Java_expo_modules_myrustmodule_MyRustModule_getInitTxData(
                 JNIEnv::from_raw(env_ptr).unwrap(),
@@ -713,7 +625,8 @@ mod tests {
 
             // Compare with expected hex
             assert_eq!(
-                hex_str, EXPECTED_INIT_BLOB,
+                hex_str,
+                test_data.ledgerblob_initdata.to_str().unwrap(),
                 "Hash output does not match expected value"
             );
 
@@ -723,7 +636,11 @@ mod tests {
     }
 
     // Helper function to create the test data with a clean approach
-    fn create_test_data<'a>(env: &'a mut JNIEnv) -> Result<JObject<'a>, jni::errors::Error> {
+    fn create_test_data<'a>(
+        env: &'a mut JNIEnv,
+        test_data: &TestData,
+    ) -> Result<JObject<'a>, jni::errors::Error> {
+        let init_data = &test_data.tx_init_data;
         // Create an empty InitData object
         let obj = env.new_object("expo/modules/myrustmodule/InitData", "()V", &[])?;
 
@@ -735,17 +652,17 @@ mod tests {
 
         // Create and add first transparent input
         {
+            let tin1 = &init_data.t_in[0];
             let tin_obj = env.new_object("expo/modules/myrustmodule/TinData", "()V", &[])?;
 
             // Set path
-            let path = [2147483692, 2147483781, 2147483653, 0, 0];
-            let path_array = env.new_long_array(5)?;
+            let path: Vec<i64> = tin1.path.iter().map(|&x| x as i64).collect();
+            let path_array = env.new_long_array(tin1.path.len() as _)?;
             env.set_long_array_region(&path_array, 0, &path)?;
             env.set_field(&tin_obj, "path", "[J", JValue::Object(&path_array))?;
 
             // Set address
-            let addr = "1976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac";
-            let jstr = env.new_string(addr)?;
+            let jstr = env.new_string(tin1.address.to_str().unwrap())?;
             env.set_field(
                 &tin_obj,
                 "address",
@@ -754,7 +671,7 @@ mod tests {
             )?;
 
             // Set value
-            env.set_field(&tin_obj, "value", "J", JValue::Long(50000))?;
+            env.set_field(&tin_obj, "value", "J", JValue::Long(tin1.value as _))?;
 
             // Add to list
             env.call_method(
@@ -767,17 +684,17 @@ mod tests {
 
         // Create and add second transparent input (same data)
         {
+            let tin2 = &init_data.t_in[1];
             let tin_obj = env.new_object("expo/modules/myrustmodule/TinData", "()V", &[])?;
 
             // Set path
-            let path = [2147483692, 2147483781, 2147483653, 0, 0];
-            let path_array = env.new_long_array(5)?;
+            let path: Vec<i64> = tin2.path.iter().map(|&x| x as i64).collect();
+            let path_array = env.new_long_array(tin2.path.len() as _)?;
             env.set_long_array_region(&path_array, 0, &path)?;
             env.set_field(&tin_obj, "path", "[J", JValue::Object(&path_array))?;
 
             // Set address
-            let addr = "1976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac";
-            let jstr = env.new_string(addr)?;
+            let jstr = env.new_string(tin2.address.to_str().unwrap())?;
             env.set_field(
                 &tin_obj,
                 "address",
@@ -786,7 +703,7 @@ mod tests {
             )?;
 
             // Set value
-            env.set_field(&tin_obj, "value", "J", JValue::Long(50000))?;
+            env.set_field(&tin_obj, "value", "J", JValue::Long(tin2.value as _))?;
 
             // Add to list
             env.call_method(
@@ -799,11 +716,11 @@ mod tests {
 
         // Create and add first transparent output
         {
+            let tout1 = &init_data.t_out[0];
             let tout_obj = env.new_object("expo/modules/myrustmodule/ToutData", "()V", &[])?;
 
             // Set address
-            let addr = "1976a914000000000000000000000000000000000000000088ac";
-            let jstr = env.new_string(addr)?;
+            let jstr = env.new_string(tout1.address.to_str().unwrap())?;
             env.set_field(
                 &tout_obj,
                 "address",
@@ -812,7 +729,7 @@ mod tests {
             )?;
 
             // Set value
-            env.set_field(&tout_obj, "value", "J", JValue::Long(10000))?;
+            env.set_field(&tout_obj, "value", "J", JValue::Long(tout1.value as _))?;
 
             // Add to list
             env.call_method(
@@ -825,11 +742,11 @@ mod tests {
 
         // Create and add second transparent output
         {
+            let tout2 = &init_data.t_out[1];
             let tout_obj = env.new_object("expo/modules/myrustmodule/ToutData", "()V", &[])?;
 
             // Set address
-            let addr = "1976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac";
-            let jstr = env.new_string(addr)?;
+            let jstr = env.new_string(tout2.address.to_str().unwrap())?;
             env.set_field(
                 &tout_obj,
                 "address",
@@ -838,7 +755,7 @@ mod tests {
             )?;
 
             // Set value
-            env.set_field(&tout_obj, "value", "J", JValue::Long(80000))?;
+            env.set_field(&tout_obj, "value", "J", JValue::Long(tout2.value as _))?;
 
             // Add to list
             env.call_method(

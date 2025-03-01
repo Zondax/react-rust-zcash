@@ -4,7 +4,13 @@ mod init_data;
 pub(crate) mod memory;
 mod network;
 mod parser;
+
 mod signatures;
+#[cfg(test)]
+mod test;
+#[cfg(test)]
+pub(crate) use test::*;
+
 mod transparent_input;
 mod transparent_output;
 
