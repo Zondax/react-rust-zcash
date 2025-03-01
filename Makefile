@@ -1,5 +1,5 @@
 # Directories
-JAVA_SRC_DIR = native_rust_lib/test/java/expo/modules/myrustmodule
+JAVA_SRC_DIR = native_rust_lib/java/expo/modules/myrustmodule
 TARGET_DIR = native_rust_lib/target/classes
 
 CURRENT_DIR := $(shell pwd)
@@ -34,7 +34,8 @@ rust-test-jni: compile-java
 	_JAVA_OPTIONS="-Djava.class.path=$(ABSOLUTE_TARGET_DIR) -verbose:class" \
 	CLASSPATH="$(ABSOLUTE_TARGET_DIR)" \
 	RUST_BACKTRACE=1 \
-	cargo test test_get_init_tx_data -- --nocapture
+	cargo test -- --nocapture
+	# cargo test test_get_init_tx_data -- --nocapture
 
 # Rule to build the Android project
 android-build:
