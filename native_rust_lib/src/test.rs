@@ -1,6 +1,3 @@
-use jni::errors::Result as JniResult;
-use jni::objects::{JObject, JValue};
-use jni::JNIEnv;
 mod types;
 pub use types::*;
 mod deserializer;
