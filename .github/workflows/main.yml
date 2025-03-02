@@ -1,0 +1,47 @@
+name: Rust Test
+
+on:
+  push:
+  pull_request:
+    branches: [main, master, dev]
+
+jobs:
+  test:
+    name: Rust Tests with JNI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: "temurin" # Eclipse Temurin is a good distribution choice
+          java-version: "17" # Choose appropriate Java version
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Compile Java files
+        run: make compile-java
+
+      - name: Verify Java Classpath (Debug)
+        run: make verify-classpath
+
+      - name: Run Rust tests
+        run: |
+          export ABSOLUTE_TARGET_DIR=$(pwd)/native_rust_lib/target/classes
+          echo "Setting CLASSPATH to: $ABSOLUTE_TARGET_DIR"
+          cd native_rust_lib && \
+          JAVA_OPTIONS="-Djava.class.path=$ABSOLUTE_TARGET_DIR -verbose:class" \
+          CLASSPATH="$ABSOLUTE_TARGET_DIR" \
+          RUST_BACKTRACE=1 \
+          cargo test -- --nocapture
