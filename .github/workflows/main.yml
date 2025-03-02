@@ -37,8 +37,14 @@ jobs:
         run: |
           export ABSOLUTE_TARGET_DIR=$(pwd)/native_rust_lib/target/classes
           echo "Setting CLASSPATH to: $ABSOLUTE_TARGET_DIR"
+          echo "Contents of target directory:"
+          ls -la $ABSOLUTE_TARGET_DIR/expo/modules/myrustmodule/ || echo "Directory not found"
+
           cd native_rust_lib && \
-          JAVA_OPTIONS="-Djava.class.path=$ABSOLUTE_TARGET_DIR -verbose:class" \
+          JAVA_OPTS="-Djava.class.path=$ABSOLUTE_TARGET_DIR" \
+          JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) \
           CLASSPATH="$ABSOLUTE_TARGET_DIR" \
-          RUST_BACKTRACE=1 \
+          LD_LIBRARY_PATH="$JAVA_HOME/lib:$JAVA_HOME/lib/server" \
+          _JAVA_OPTIONS="-Djava.class.path=$ABSOLUTE_TARGET_DIR" \
+          RUST_BACKTRACE=full \
           cargo test -- --nocapture
