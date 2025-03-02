@@ -13,12 +13,6 @@ $(TARGET_DIR):
 	mkdir -p $(TARGET_DIR)
 
 
-# Add debug rule to verify class loading
-.PHONY: verify-classpath
-verify-classpath: compile-java
-	@echo "Verifying class loading with classpath: $(ABSOLUTE_TARGET_DIR)"
-	java -classpath $(ABSOLUTE_TARGET_DIR) -verbose:class expo.modules.myrustmodule.InitData
-
 # Compile Java files
 .PHONY: compile-java
 compile-java: | $(TARGET_DIR)

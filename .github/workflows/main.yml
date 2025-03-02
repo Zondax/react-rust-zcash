@@ -33,9 +33,6 @@ jobs:
       - name: Compile Java files
         run: make compile-java
 
-      - name: Verify Java Classpath (Debug)
-        run: make verify-classpath
-
       - name: Run Rust tests
         run: |
           export ABSOLUTE_TARGET_DIR=$(pwd)/native_rust_lib/target/classes
