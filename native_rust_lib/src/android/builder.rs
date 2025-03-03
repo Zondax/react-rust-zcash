@@ -2,8 +2,7 @@ use crate::{
     add_signatures, add_transparent_input, add_transparent_output, build_transaction,
     create_builder, destroy_builder,
     error::{get_error_description, ZcashError},
-    memory::free_transaction_data,
-    TransactionSignatures, TransparentInputInfo, TransparentOutputInfo,
+    free_transaction_data, TransactionSignatures, TransparentInputInfo, TransparentOutputInfo,
 };
 
 use jni::{
@@ -45,7 +44,7 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_createBuild
         let exception_class = env.find_class("java/lang/RuntimeException").unwrap();
         env.throw_new(
             exception_class,
-            &format!("Failed to create builder: {}", error_msg),
+            format!("Failed to create builder: {}", error_msg),
         )
         .unwrap();
 

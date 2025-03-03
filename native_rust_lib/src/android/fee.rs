@@ -1,4 +1,4 @@
-use crate::android::init_logger;
+use crate::{calculate_fee, init_logger};
 
 use jni::{
     objects::JClass,
@@ -7,8 +7,6 @@ use jni::{
 };
 
 use log::info;
-
-use crate::calculate_fee;
 
 #[no_mangle]
 pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_calculateFee(

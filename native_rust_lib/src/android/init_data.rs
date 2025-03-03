@@ -1,6 +1,4 @@
-use crate::android::init_logger;
-use crate::memory::free_transaction_data;
-use crate::ZcashError;
+use crate::{android::init_logger, free_transaction_data, ZcashError};
 use jni::{
     objects::{JByteArray, JClass, JIntArray, JLongArray, JObject, JString, JValue},
     sys::{jbyteArray, jint, jsize},
