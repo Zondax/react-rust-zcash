@@ -72,6 +72,21 @@ data class InitData(
     val sOutput: List<SaplingOutData>
 )
 
+// Convert a hex string to a ByteArray
+fun hexToByteArray(hex: String): ByteArray {
+    val hexString = if (hex.startsWith("0x")) hex.substring(2) else hex
+    val len = hexString.length
+    val data = ByteArray(len / 2)
+    
+    for (i in 0 until len step 2) {
+        data[i / 2] = ((Character.digit(hexString[i], 16) shl 4) + 
+                        Character.digit(hexString[i + 1], 16)).toByte()
+    }
+    
+    return data
+}
+
+
 class MyRustModule : Module() {
     companion object {
         init {
@@ -91,6 +106,7 @@ class MyRustModule : Module() {
     private external fun addTransparentInput(builderId: Long, input: TransparentInput): Int
     private external fun addTransparentOutput(builderId: Long, output: TransparentOutput): Int
     private external fun buildTransaction(builderId: Long, spendPath: String, outputPath: String, txVersion: Int): ByteArray
+    private external fun finalizeTransaction(builderId: Long): ByteArray
     private external fun getErrorDescription(errorCode: Int): String
     private external fun getInitTxData(initData: InitData): ByteArray
     
@@ -184,7 +200,7 @@ class MyRustModule : Module() {
         }
         
         // Build transaction
-        // Build transaction - Simple mock implementation
+        // Build transaction
         AsyncFunction("buildTransaction") { builderId: Double, _: String, _: String, txVersion: Int ->
             try {
                 Log.d("MyRustModule", "Building transaction with builder $builderId")
@@ -321,6 +337,22 @@ class MyRustModule : Module() {
                 hexString
             } catch (e: Exception) {
                 Log.e("MyRustModule", "Error in getInitTxData", e)
+                throw e
+            }
+        }
+
+        AsyncFunction("finalizeTransaction") { builderId: Double ->
+            try {
+                Log.d("MyRustModule", "Finalizing transaction with builder $builderId")
+                
+                // Call the native method
+                val txBytes = finalizeTransaction(builderId.toLong())
+                val hexString = txBytes.joinToString("") { "%02x".format(it) }
+                
+                Log.d("MyRustModule", "Transaction finalized successfully, size: ${hexString.length / 2} bytes")
+                hexString
+            } catch (e: Exception) {
+                Log.e("MyRustModule", "Error finalizing transaction", e)
                 throw e
             }
         }

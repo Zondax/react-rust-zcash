@@ -92,6 +92,11 @@ export async function buildTransaction(
   );
 }
 
+export async function finalizeTransaction(builderId: number): Promise<string> {
+  console.log("Finalizing transaction with builder:", builderId);
+  return await MyRustModule.finalizeTransaction(builderId);
+}
+
 export async function getErrorDescription(errorCode: number): Promise<string> {
   return await MyRustModule.getErrorDescription(errorCode);
 }

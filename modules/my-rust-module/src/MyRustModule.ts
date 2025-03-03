@@ -29,6 +29,8 @@ export default {
     txVersion: number,
   ) =>
     MyRustModule.buildTransaction(builderId, spendPath, outputPath, txVersion),
+  finalizeTransaction: (builderId: number) =>
+    MyRustModule.finalizeTransaction(builderId),
   getErrorDescription: (errorCode: number) =>
     MyRustModule.getErrorDescription(errorCode),
   setValueAsync: (value: string) => MyRustModule.setValueAsync(value),
