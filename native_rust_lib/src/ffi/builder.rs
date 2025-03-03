@@ -77,6 +77,20 @@ pub extern "C" fn destroy_builder(builder_id: u64) -> u32 {
     }
 }
 
+/// Adds a transparent input to a transaction builder.
+///
+/// This function adds a transparent input (UTXO) to the specified builder using the provided
+/// input information including outpoint, public key, script, and amount.
+///
+/// # Parameters
+///
+/// * `builder_id`: The ID of the builder to add the input to
+/// * `input`: Structure containing transparent input information (outpoint, public key, address, amount)
+///
+/// # Returns
+///
+/// A `u32` error code. `ZcashError::Success` (0) on success, or an appropriate error code otherwise.
+/// Returns `ZcashError::AlreadyAuthorized` if the builder is already in an authorized state.
 #[no_mangle]
 pub extern "C" fn add_transparent_input(builder_id: u64, input: TransparentInputInfo) -> u32 {
     let mut builders = BUILDERS.lock().unwrap();
@@ -139,6 +153,20 @@ pub extern "C" fn add_transparent_input(builder_id: u64, input: TransparentInput
     }
 }
 
+/// Adds a transparent output to a transaction builder.
+///
+/// This function adds a transparent output to the specified builder using the provided
+/// output information including address script and amount.
+///
+/// # Parameters
+///
+/// * `builder_id`: The ID of the builder to add the output to
+/// * `output`: Structure containing transparent output information (address script, amount)
+///
+/// # Returns
+///
+/// A `u32` error code. `ZcashError::Success` (0) on success, or an appropriate error code otherwise.
+/// Returns `ZcashError::AlreadyAuthorized` if the builder is already in an authorized state.
 #[no_mangle]
 pub extern "C" fn add_transparent_output(builder_id: u64, output: TransparentOutputInfo) -> u32 {
     let mut builders = BUILDERS.lock().unwrap();
@@ -182,6 +210,21 @@ pub extern "C" fn add_transparent_output(builder_id: u64, output: TransparentOut
     }
 }
 
+/// Adds signatures to a transaction builder, authorizing it for finalization.
+///
+/// This function takes transaction signatures and adds them to the specified builder.
+/// It adds both Sapling signatures (currently empty) and transparent signatures,
+/// then converts the builder to an authorized state that can be finalized.
+///
+/// # Parameters
+///
+/// * `builder_id`: The ID of the builder to add signatures to
+/// * `signatures`: A structure containing the transaction signatures to add
+///
+/// # Returns
+///
+/// A `u32` error code. `ZcashError::Success` (0) on success, or an appropriate error code otherwise.
+/// Returns `ZcashError::AlreadyAuthorized` if the builder is already in an authorized state.
 #[no_mangle]
 pub extern "C" fn add_signatures(builder_id: u64, signatures: TransactionSignatures) -> u32 {
     let mut builders = BUILDERS.lock().unwrap();
@@ -270,6 +313,29 @@ pub extern "C" fn add_signatures(builder_id: u64, signatures: TransactionSignatu
     }
 }
 
+/// Builds a transaction and returns serialized data for hardware signing module (HSM).
+///
+/// This function takes a builder ID, paths to spend and output parameters files, and a transaction
+/// version to build a transaction. The result is HSM-formatted data that can be sent to a hardware
+/// signing device.
+///
+/// # Safety
+///
+/// This function is safe to call, but the caller is responsible for freeing the memory allocated
+/// for the HSM data using `crate::free_transaction_data` when it's no longer needed.
+///
+/// # Parameters
+///
+/// * `builder_id`: The ID of the builder to use
+/// * `spend_path`: Path to the spend parameters file
+/// * `output_path`: Path to the output parameters file
+/// * `tx_version`: Transaction version (4 for Sapling, 5 for Zip225)
+/// * `result_ptr`: Pointer to store the address of the allocated HSM data bytes
+/// * `result_len`: Pointer to store the length of the HSM data bytes
+///
+/// # Returns
+///
+/// A `u32` error code. `ZcashError::Success` (0) on success, or an appropriate error code otherwise.
 #[no_mangle]
 pub extern "C" fn build_transaction(
     builder_id: u64,
@@ -519,208 +585,72 @@ pub extern "C" fn build_transaction(
     }
 }
 
-// #[no_mangle]
-// pub extern "C" fn build_transaction_with_bytes(
-//     builder_id: u64,
-//     spend_params_ptr: *const u8,
-//     spend_params_len: usize,
-//     output_params_ptr: *const u8,
-//     output_params_len: usize,
-//     tx_version: u8,
-//     result_ptr: *mut *mut u8,
-//     result_len: *mut usize,
-// ) -> u32 {
-//     info!(
-//         "Building transaction with bytes for builder: {}",
-//         builder_id
-//     );
-//
-//     // Validate input pointers
-//     if spend_params_ptr.is_null() || output_params_ptr.is_null() {
-//         error!("Build parameters are null");
-//         return ZcashError::InvalidArgument as u32;
-//     }
-//
-//     // Create slices from the raw pointers
-//     let spend_params_bytes =
-//         unsafe { std::slice::from_raw_parts(spend_params_ptr, spend_params_len) };
-//     let output_params_bytes =
-//         unsafe { std::slice::from_raw_parts(output_params_ptr, output_params_len) };
-//
-//     info!(
-//         "Got parameter bytes: spend={} bytes, output={} bytes",
-//         spend_params_len, output_params_len
-//     );
-//
-//     // Parse tx_version
-//     let tx_ver = match tx_version {
-//         4 => Some(TxVersion::Sapling),
-//         5 => Some(TxVersion::Zip225),
-//         _ => None,
-//     };
-//
-//     let mut builders = BUILDERS.lock().unwrap();
-//
-//     if let Some(builder) = builders.remove(&builder_id) {
-//         info!("Got builder from list");
-//
-//         // Handle based on builder state
-//         let result = match builder {
-//             // Only unauthorized builders can be built
-//             NetworkBuilder::Mainnet(mut builder) => {
-//                 info!("building mainnet");
-//
-//                 // Use from_bytes method to create prover
-//                 let prover_result = std::panic::catch_unwind(|| {
-//                     txprover::LocalTxProver::from_bytes(spend_params_bytes, output_params_bytes)
-//                 });
-//
-//                 let mut prover = match prover_result {
-//                     Ok(prover) => {
-//                         info!("prover created successfully");
-//                         prover
-//                     }
-//                     Err(e) => {
-//                         // Try to extract panic message
-//                         let panic_msg = if let Some(s) = e.downcast_ref::<String>() {
-//                             s.clone()
-//                         } else if let Some(s) = e.downcast_ref::<&str>() {
-//                             s.to_string()
-//                         } else {
-//                             "Unknown panic in prover creation".to_string()
-//                         };
-//
-//                         error!("Prover creation failed with panic: {}", panic_msg);
-//                         return ZcashError::InternalError as u32;
-//                     }
-//                 };
-//
-//                 let build_result = builder.build(consensus::BranchId::Nu6, tx_ver, &mut prover);
-//
-//                 match build_result {
-//                     Ok(hsm_data) => {
-//                         info!("hsm_data OK");
-//                         // Put the builder back in the map
-//                         builders.insert(builder_id, NetworkBuilder::Mainnet(builder));
-//
-//                         // Get the bytes from HsmTxData
-//                         match hsm_data.to_hsm_bytes() {
-//                             Ok(bytes) => {
-//                                 unsafe {
-//                                     // Allocate memory for the result
-//                                     info!("allocating memory");
-//                                     let buffer =
-//                                         libc::malloc(bytes.len() * std::mem::size_of::<u8>())
-//                                             as *mut u8;
-//                                     if buffer.is_null() {
-//                                         error!(
-//                                             "buffer is null - could not allocate: {}",
-//                                             bytes.len()
-//                                         );
-//                                         return ZcashError::ReadWriteError as u32;
-//                                     }
-//
-//                                     // Copy the transaction bytes to the allocated memory
-//                                     std::ptr::copy_nonoverlapping(
-//                                         bytes.as_ptr(),
-//                                         buffer,
-//                                         bytes.len(),
-//                                     );
-//
-//                                     // Set output parameters
-//                                     *result_ptr = buffer;
-//                                     *result_len = bytes.len();
-//                                 }
-//                                 info!("success");
-//                                 ZcashError::Success as u32
-//                             }
-//                             Err(e) => {
-//                                 error!("Error: {:?}", e);
-//                                 ZcashError::ReadWriteError as u32
-//                             }
-//                         }
-//                     }
-//                     Err(e) => {
-//                         error!("Error: {:?}", e);
-//                         let error = ZcashError::from(e);
-//                         error as u32
-//                     }
-//                 }
-//             }
-//             NetworkBuilder::Testnet(mut builder) => {
-//                 // Similar implementation for testnet
-//                 // ...
-//                 ZcashError::InvalidArgument as u32 // Placeholder
-//             }
-//             // Already authorized builders can't be built
-//             NetworkBuilder::MainnetAuthorized(_) | NetworkBuilder::TestnetAuthorized(_) => {
-//                 error!("Already authorized");
-//                 return ZcashError::AlreadyAuthorized as u32;
-//             }
-//         };
-//
-//         result
-//     } else {
-//         ZcashError::BuilderNotFound as u32
-//     }
-// }
+/// Finalizes a transaction built by an authorized builder and returns the serialized transaction bytes.
+///
+/// This function removes the builder from the global builders map and finalizes the transaction,
+/// returning the serialized bytes to the caller.
+///
+/// # Safety
+///
+/// This function is safe to call, but the caller is responsible for freeing the memory allocated
+/// for the transaction data using `crate::free_transaction_data` when it's no longer needed.
+///
+/// # Parameters
+///
+/// * `builder_id`: The ID of the builder to finalize
+/// * `result_ptr`: Pointer to store the address of the allocated transaction bytes
+/// * `result_len`: Pointer to store the length of the transaction bytes
+///
+/// # Returns
+///
+/// A `u32` error code. `ZcashError::Success` (0) on success, or an appropriate error code otherwise.
+#[no_mangle]
+pub extern "C" fn finalize_transaction(
+    builder_id: u64,
+    result_ptr: *mut *mut u8,
+    result_len: *mut usize,
+) -> u32 {
+    let mut builders = BUILDERS.lock().unwrap();
 
-// #[no_mangle]
-// pub extern "C" fn finalize_transaction(
-//     builder_id: u64,
-//     result_ptr: *mut *mut u8,
-//     result_len: *mut usize,
-// ) -> u32 {
-//     let mut builders = BUILDERS.lock().unwrap();
-//
-//     if let Some(builder) = builders.remove(&builder_id) {
-//         // Add transparent signatures (this is a simplified version)
-//         // In a real implementation, you'd need to handle signatures properly
-//         let result = match builder {
-//             NetworkBuilder::Mainnet(builder) => {
-//                 let builder_authorized = builder.add_signatures_transparent(vec![]);
-//                 match builder_authorized {
-//                     Ok(authorized_builder) => authorized_builder.finalize_js(),
-//                     Err(e) => Err(e),
-//                 }
-//             }
-//             NetworkBuilder::Testnet(builder) => {
-//                 let builder_authorized = builder.add_signatures_transparent(vec![]);
-//                 match builder_authorized {
-//                     Ok(authorized_builder) => authorized_builder.finalize_js(),
-//                     Err(e) => Err(e),
-//                 }
-//             }
-//         };
-//
-//         match result {
-//             Ok(tx_bytes) => {
-//                 unsafe {
-//                     // Allocate memory for the result
-//                     let buffer =
-//                         libc::malloc(tx_bytes.len() * std::mem::size_of::<u8>()) as *mut u8;
-//                     if buffer.is_null() {
-//                         return ZcashError::ReadWriteError as u32;
-//                     }
-//
-//                     // Copy the transaction bytes to the allocated memory
-//                     std::ptr::copy_nonoverlapping(tx_bytes.as_ptr(), buffer, tx_bytes.len());
-//
-//                     // Set output parameters
-//                     *result_ptr = buffer;
-//                     *result_len = tx_bytes.len();
-//                 }
-//                 ZcashError::Success as u32
-//             }
-//             Err(e) => {
-//                 let error = ZcashError::from(e);
-//                 error as u32
-//             }
-//         }
-//     } else {
-//         ZcashError::BuilderNotFound as u32
-//     }
-// }
+    if let Some(builder) = builders.remove(&builder_id) {
+        // Only authorized builders can be finalized
+        // which implies its destruction upon transaction finalization
+        // if builder is not authorized, returns an error
+        let result = match builder {
+            NetworkBuilder::MainnetAuthorized(mut builder) => builder.finalize_js(),
+            NetworkBuilder::TestnetAuthorized(mut builder) => builder.finalize_js(),
+            _ => return ZcashError::Unauthorized as u32,
+        };
+
+        match result {
+            Ok(tx_bytes) => {
+                unsafe {
+                    // Allocate memory for the result
+                    let buffer =
+                        libc::malloc(tx_bytes.len() * std::mem::size_of::<u8>()) as *mut u8;
+                    if buffer.is_null() {
+                        return ZcashError::ReadWriteError as u32;
+                    }
+
+                    // Copy the transaction bytes to the allocated memory
+                    std::ptr::copy_nonoverlapping(tx_bytes.as_ptr(), buffer, tx_bytes.len());
+
+                    // Set output parameters
+                    *result_ptr = buffer;
+                    *result_len = tx_bytes.len();
+                }
+                ZcashError::Success as u32
+            }
+            Err(e) => {
+                let error = ZcashError::from(e);
+                error as u32
+            }
+        }
+    } else {
+        ZcashError::BuilderNotFound as u32
+    }
+}
+
 #[cfg(test)]
 mod test_builder {
     use super::*;

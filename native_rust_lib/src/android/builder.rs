@@ -2,6 +2,7 @@ use crate::{
     add_signatures, add_transparent_input, add_transparent_output, build_transaction,
     create_builder, destroy_builder,
     error::{get_error_description, ZcashError},
+    ffi::finalize_transaction,
     free_transaction_data, TransactionSignatures, TransparentInputInfo, TransparentOutputInfo,
 };
 
@@ -214,6 +215,45 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_buildTransa
     } else {
         let error_msg = get_error_description(result);
         error!("Error destroying builder: {}", error_msg);
+        **env.new_byte_array(0).unwrap()
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_finalizeTransaction(
+    mut env: JNIEnv,
+    _class: JClass,
+    builder_id: jlong,
+) -> jbyteArray {
+    init_logger();
+    info!(
+        "MyRustModule: Finalizing transaction for builder: {}",
+        builder_id
+    );
+
+    let mut result_ptr: *mut u8 = ptr::null_mut();
+    let mut result_len: usize = 0;
+
+    info!("MyRustModule: Calling rust-native finalize_transaction");
+    let result = finalize_transaction(builder_id as u64, &mut result_ptr, &mut result_len);
+
+    info!("MyRustModule: Transaction data length {}", result_len);
+
+    if result == ZcashError::Success as u32 && !result_ptr.is_null() {
+        let byte_array = env.new_byte_array(result_len as jint).unwrap();
+        env.set_byte_array_region(
+            &byte_array,
+            0,
+            std::slice::from_raw_parts(result_ptr as *const i8, result_len),
+        )
+        .unwrap();
+
+        // Free the data allocated in finalize_transaction
+        free_transaction_data(result_ptr);
+        **byte_array
+    } else {
+        let error_msg = get_error_description(result);
+        error!("Error finalizing transaction: {}", error_msg);
         **env.new_byte_array(0).unwrap()
     }
 }
