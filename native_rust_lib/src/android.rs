@@ -30,7 +30,7 @@ pub fn create_java_string(env: &JNIEnv, desc_str: &str) -> jstring {
 mod android_tx_test {
 
     use crate::{
-        test::{open_sapling_params, open_test_data},
+        test::{get_or_init_jvm, open_sapling_params, open_test_data},
         ZcashError,
     };
 
@@ -45,13 +45,7 @@ mod android_tx_test {
 
     #[test]
     fn test_complete_transaction_flow() {
-        // Initialize JVM using InitArgsBuilder
-        let jvm_args = InitArgsBuilder::new()
-            .option("-Xcheck:jni")
-            .build()
-            .expect("Failed to build JVM args");
-
-        let jvm = JavaVM::new(jvm_args).expect("Failed to create JavaVM");
+        let jvm = get_or_init_jvm();
 
         // Attach to the current thread
         let mut env = jvm

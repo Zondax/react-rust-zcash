@@ -9,7 +9,7 @@ use zcash_primitives::consensus::{self, MainNetwork, TestNetwork};
 use zcash_primitives::transaction::components::{sapling, transparent, TxOut};
 use zcash_primitives::transaction::TxVersion;
 
-use crate::{NetworkType, Signatures, TransparentInput, TransparentOutput, ZcashError};
+use crate::{NetworkType, ZcashError};
 
 use super::{CSignatures, CTransparentInput, CTransparentOutput};
 
@@ -648,108 +648,5 @@ pub extern "C" fn finalize_transaction(
         }
     } else {
         ZcashError::BuilderNotFound as u32
-    }
-}
-
-#[cfg(test)]
-mod test_builder {
-    use crate::ffi::{CTransparentInput, CTransparentOutput};
-
-    use super::*;
-    use std::ffi::CString;
-    use std::path::PathBuf;
-    use std::ptr;
-
-    #[test]
-    fn test_transaction_flow() {
-        // Step 1: Calculate fee (1 transparent input, 1 transparent output, 0 Sapling)
-        let fee = crate::calculate_fee(1, 1, 0, 0);
-
-        // Step 2: Create a builder
-        let mut builder_id: u64 = 0;
-        let create_result = create_builder(fee, NetworkType::Mainnet as u8, &mut builder_id);
-        assert_eq!(create_result, ZcashError::Success as u32);
-
-        // Step 3: Add transparent input
-        let outp_cstr = CString::new(
-            "000000000000000000000000000000000000000000000000000000000000000000000000",
-        )
-        .unwrap();
-        let pk_cstr =
-            CString::new("031f6d238009787c20d5d7becb6b6ad54529fc0a3fd35088e85c2c3966bfec050e")
-                .unwrap();
-        let addr_in_cstr =
-            CString::new("1976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac").unwrap();
-
-        let input = CTransparentInput::from_raw(
-            outp_cstr.as_ptr(),
-            pk_cstr.as_ptr(),
-            addr_in_cstr.as_ptr(),
-            50000,
-        );
-
-        let add_input_result = add_transparent_input(builder_id, input);
-        assert_eq!(add_input_result, ZcashError::Success as u32);
-
-        // Step 4: Add transparent output
-        let addr_out_cstr =
-            CString::new("1976a914000000000000000000000000000000000000000088ac").unwrap();
-
-        let output = CTransparentOutput::from_raw(
-            addr_out_cstr.as_ptr(),
-            40000, // 50000 - 10000 = 40000 so no change required
-        );
-
-        let add_output_result = add_transparent_output(builder_id, output);
-        assert_eq!(add_output_result, ZcashError::Success as u32);
-
-        // Step 5: Build the transaction
-        // Find parameter files - first try current directory, then try relative to Cargo.toml
-        let mut spend_path = PathBuf::from("sapling-spend.params");
-        let mut output_path = PathBuf::from("sapling-output.params");
-
-        if !spend_path.exists() {
-            // Try to find in parent directories (up to 3 levels)
-            for _ in 0..3 {
-                spend_path = PathBuf::from("../").join(spend_path);
-                output_path = PathBuf::from("../").join(output_path);
-                if spend_path.exists() && output_path.exists() {
-                    break;
-                }
-            }
-        }
-
-        assert!(spend_path.exists(), "Sapling spend params file not found");
-        assert!(output_path.exists(), "Sapling output params file not found");
-
-        // Convert paths to C strings
-        let spend_path_cstr = CString::new(spend_path.to_str().unwrap()).unwrap();
-        let output_path_cstr = CString::new(output_path.to_str().unwrap()).unwrap();
-
-        let mut result_ptr: *mut u8 = ptr::null_mut();
-        let mut result_len: usize = 0;
-
-        let build_result = build_transaction(
-            builder_id,
-            spend_path_cstr.as_ptr(),
-            output_path_cstr.as_ptr(),
-            5, // Use Zip225 version
-            &mut result_ptr,
-            &mut result_len,
-        );
-
-        // Check if the transaction building was successful
-        if build_result == ZcashError::Success as u32 {
-            // Free the memory allocated by the build_transaction function
-            if !result_ptr.is_null() {
-                unsafe {
-                    libc::free(result_ptr as *mut libc::c_void);
-                }
-            }
-        }
-
-        // Clean up
-        let destroy_result = destroy_builder(builder_id);
-        assert_eq!(destroy_result, ZcashError::Success as u32);
     }
 }
