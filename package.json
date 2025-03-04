@@ -11,7 +11,7 @@
     "cargo-android": "tsx scripts/cargo-android.ts"
   },
   "dependencies": {
-    "expo": "~50.0.6",
+    "expo": "~52.0.37",
     "expo-status-bar": "~1.11.1",
     "react": "18.2.0",
     "react-native": "0.73.4"
