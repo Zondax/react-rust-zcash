@@ -9,9 +9,9 @@ use zcash_primitives::consensus::{self, MainNetwork, TestNetwork};
 use zcash_primitives::transaction::components::{sapling, transparent, TxOut};
 use zcash_primitives::transaction::TxVersion;
 
-use crate::{
-    NetworkType, TransactionSignatures, TransparentInputInfo, TransparentOutputInfo, ZcashError,
-};
+use crate::{NetworkType, Signatures, TransparentInput, TransparentOutput, ZcashError};
+
+use super::{CSignatures, CTransparentInput, CTransparentOutput};
 
 // Enum to store builders with different network types
 enum NetworkBuilder {
@@ -92,7 +92,7 @@ pub extern "C" fn destroy_builder(builder_id: u64) -> u32 {
 /// A `u32` error code. `ZcashError::Success` (0) on success, or an appropriate error code otherwise.
 /// Returns `ZcashError::AlreadyAuthorized` if the builder is already in an authorized state.
 #[no_mangle]
-pub extern "C" fn add_transparent_input(builder_id: u64, input: TransparentInputInfo) -> u32 {
+pub extern "C" fn add_transparent_input(builder_id: u64, input: CTransparentInput) -> u32 {
     let mut builders = BUILDERS.lock().unwrap();
 
     if let Some(builder) = builders.get_mut(&builder_id) {
@@ -168,7 +168,7 @@ pub extern "C" fn add_transparent_input(builder_id: u64, input: TransparentInput
 /// A `u32` error code. `ZcashError::Success` (0) on success, or an appropriate error code otherwise.
 /// Returns `ZcashError::AlreadyAuthorized` if the builder is already in an authorized state.
 #[no_mangle]
-pub extern "C" fn add_transparent_output(builder_id: u64, output: TransparentOutputInfo) -> u32 {
+pub extern "C" fn add_transparent_output(builder_id: u64, output: CTransparentOutput) -> u32 {
     let mut builders = BUILDERS.lock().unwrap();
 
     if let Some(builder) = builders.get_mut(&builder_id) {
@@ -226,7 +226,7 @@ pub extern "C" fn add_transparent_output(builder_id: u64, output: TransparentOut
 /// A `u32` error code. `ZcashError::Success` (0) on success, or an appropriate error code otherwise.
 /// Returns `ZcashError::AlreadyAuthorized` if the builder is already in an authorized state.
 #[no_mangle]
-pub extern "C" fn add_signatures(builder_id: u64, signatures: TransactionSignatures) -> u32 {
+pub extern "C" fn add_signatures(builder_id: u64, signatures: CSignatures) -> u32 {
     let mut builders = BUILDERS.lock().unwrap();
 
     if let Some(builder) = builders.remove(&builder_id) {
@@ -653,6 +653,8 @@ pub extern "C" fn finalize_transaction(
 
 #[cfg(test)]
 mod test_builder {
+    use crate::ffi::{CTransparentInput, CTransparentOutput};
+
     use super::*;
     use std::ffi::CString;
     use std::path::PathBuf;
@@ -679,7 +681,7 @@ mod test_builder {
         let addr_in_cstr =
             CString::new("1976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac").unwrap();
 
-        let input = TransparentInputInfo::from_raw(
+        let input = CTransparentInput::from_raw(
             outp_cstr.as_ptr(),
             pk_cstr.as_ptr(),
             addr_in_cstr.as_ptr(),
@@ -693,7 +695,7 @@ mod test_builder {
         let addr_out_cstr =
             CString::new("1976a914000000000000000000000000000000000000000088ac").unwrap();
 
-        let output = TransparentOutputInfo::from_raw(
+        let output = CTransparentOutput::from_raw(
             addr_out_cstr.as_ptr(),
             40000, // 50000 - 10000 = 40000 so no change required
         );

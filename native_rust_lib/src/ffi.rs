@@ -1,6 +1,12 @@
 mod builder;
+mod c_signatures;
+mod c_tinput;
+mod c_toutput;
 mod fee;
 mod memory;
 pub use builder::*;
+pub use c_signatures::*;
+pub use c_tinput::*;
+pub use c_toutput::*;
 pub use fee::calculate_fee;
 pub use memory::*;

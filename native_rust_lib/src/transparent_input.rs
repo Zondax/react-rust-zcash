@@ -1,74 +1,29 @@
-use std::ffi::{c_char, CStr};
+use crate::deserialize_cstring;
+use std::ffi::CString;
 
-use zcash_primitives::{
-    legacy::Script,
-    transaction::components::{Amount, OutPoint},
-};
+use serde::{Deserialize, Serialize};
 
-use crate::{
-    parser::{parse_outpoint, parse_public_key, parse_script},
-    ZcashError,
-};
+use crate::{ffi::CTransparentInput, ZcashError};
 
-// C-compatible structs for transparent operations
-#[repr(C)]
-pub struct TransparentInputInfo {
-    outp: *const c_char,
-    pk: *const c_char,
-    address: *const c_char,
-    value: u64,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TransparentInput {
+    #[serde(deserialize_with = "deserialize_cstring")]
+    pub outp: CString,
+    #[serde(deserialize_with = "deserialize_cstring")]
+    pub pk: CString,
+    #[serde(deserialize_with = "deserialize_cstring")]
+    pub address: CString,
+    pub value: u64,
 }
 
-impl TransparentInputInfo {
-    pub fn from_raw(
-        outp: *const c_char,
-        pk: *const c_char,
-        address: *const c_char,
-        value: u64,
-    ) -> Self {
-        Self {
-            outp,
-            pk,
-            address,
-            value,
-        }
-    }
-
-    pub fn outpoint(&self) -> Result<OutPoint, ZcashError> {
-        unsafe {
-            let outp_str = CStr::from_ptr(self.outp)
-                .to_str()
-                .map_err(|_| ZcashError::InvalidArgument)?;
-
-            parse_outpoint(outp_str)
-        }
-    }
-
-    pub fn public_key(&self) -> Result<secp256k1::PublicKey, ZcashError> {
-        unsafe {
-            let pk_str = CStr::from_ptr(self.pk)
-                .to_str()
-                .map_err(|_| ZcashError::InvalidArgument)?;
-
-            parse_public_key(pk_str)
-        }
-    }
-
-    pub fn address(&self) -> Result<Script, ZcashError> {
-        unsafe {
-            let address_str = CStr::from_ptr(self.address)
-                .to_str()
-                .map_err(|_| ZcashError::InvalidArgument)?;
-            parse_script(address_str)
-        }
-    }
-
-    pub fn amount(&self) -> Result<Amount, ZcashError> {
-        Amount::from_u64(self.value).map_err(|_| ZcashError::InvalidArgument)
-    }
-
-    pub fn any_null(&self) -> bool {
-        self.outp.is_null() || self.pk.is_null() || self.address.is_null()
+impl TransparentInput {
+    pub fn as_raw(&self) -> CTransparentInput {
+        CTransparentInput::from_raw(
+            self.outp.as_ptr(),
+            self.pk.as_ptr(),
+            self.address.as_ptr(),
+            self.value,
+        )
     }
 }
 
@@ -78,10 +33,13 @@ use jni::{
     signature::{Primitive, ReturnType},
     JNIEnv,
 };
+
 #[cfg(any(target_os = "android", test))]
-impl TransparentInputInfo {
+impl TransparentInput {
     pub unsafe fn from_java(env: &mut JNIEnv, obj: JObject) -> Result<Self, ZcashError> {
         use log::error;
+        use std::ffi::CString;
+
         // Get outp field
         let outp_field = match env.get_field_id(
             env.get_object_class(&obj).unwrap(),
@@ -103,11 +61,17 @@ impl TransparentInputInfo {
                 return Err(ZcashError::InvalidArgument);
             }
         };
-
         let outp_jstring = JString::from(outp_value);
         if outp_jstring.is_null() {
             return Err(ZcashError::InvalidArgument);
         }
+
+        // Extract string data safely
+        let outp_rust_string = env
+            .get_string(&outp_jstring)
+            .map_err(|_| ZcashError::InvalidArgument)?
+            .to_string_lossy()
+            .into_owned();
 
         // Get pk field
         let pk_field = match env.get_field_id(
@@ -124,11 +88,17 @@ impl TransparentInputInfo {
             Ok(value) => value.l().unwrap(),
             Err(_) => return Err(ZcashError::InvalidArgument),
         };
-
         let pk_jstring = JString::from(pk_value);
         if pk_jstring.is_null() {
             return Err(ZcashError::InvalidArgument);
         }
+
+        // Extract string data safely
+        let pk_rust_string = env
+            .get_string(&pk_jstring)
+            .map_err(|_| ZcashError::InvalidArgument)?
+            .to_string_lossy()
+            .into_owned();
 
         // Get address field
         let address_field = match env.get_field_id(
@@ -145,11 +115,17 @@ impl TransparentInputInfo {
             Ok(value) => value.l().unwrap(),
             Err(_) => return Err(ZcashError::InvalidArgument),
         };
-
         let address_jstring = JString::from(address_value);
         if address_jstring.is_null() {
             return Err(ZcashError::InvalidArgument);
         }
+
+        // Extract string data safely
+        let address_rust_string = env
+            .get_string(&address_jstring)
+            .map_err(|_| ZcashError::InvalidArgument)?
+            .to_string_lossy()
+            .into_owned();
 
         // Get value field
         let value_field = match env.get_field_id(env.get_object_class(&obj).unwrap(), "value", "J")
@@ -165,14 +141,19 @@ impl TransparentInputInfo {
             .map(|long_value| long_value as u64)
             .map_err(|_| ZcashError::InvalidArgument)?;
 
-        // Create a new TransparentInputInfo with the extracted values
-        let ret = Ok(TransparentInputInfo {
-            outp: env.get_string(&outp_jstring).unwrap().as_ptr(),
-            pk: env.get_string(&pk_jstring).unwrap().as_ptr(),
-            address: env.get_string(&address_jstring).unwrap().as_ptr(),
-            value: value as u64,
-        });
+        // Create CStrings from the Rust strings
+        let outp_cstring =
+            CString::new(outp_rust_string).map_err(|_| ZcashError::InvalidOutpoint)?;
+        let pk_cstring = CString::new(pk_rust_string).map_err(|_| ZcashError::InvalidPubkey)?;
+        let address_cstring =
+            CString::new(address_rust_string).map_err(|_| ZcashError::InvalidAddress)?;
 
-        ret
+        // Create a new TransparentInputInfo with the extracted values
+        Ok(TransparentInput {
+            outp: outp_cstring,
+            pk: pk_cstring,
+            address: address_cstring,
+            value,
+        })
     }
 }

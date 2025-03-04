@@ -1,3 +1,4 @@
+mod deserializer;
 mod error;
 mod ffi;
 mod init_data;
@@ -5,6 +6,7 @@ mod network;
 mod parser;
 
 mod signatures;
+
 #[cfg(test)]
 mod test;
 #[cfg(test)]
@@ -12,8 +14,8 @@ pub(crate) use test::*;
 
 mod transparent_input;
 mod transparent_output;
+pub use deserializer::{deserialize_cstring, deserialize_cstring_vec};
 
-// #[cfg(target_os = "android")]
 #[cfg(any(target_os = "android", test))]
 mod android;
 #[cfg(target_os = "android")]
@@ -28,6 +30,6 @@ pub use ffi::{
 };
 pub use init_data::{CInitData, CSaplingInData, CSaplingOutData, CTinData, CToutData};
 pub use network::NetworkType;
-pub use signatures::TransactionSignatures;
-pub use transparent_input::TransparentInputInfo;
-pub use transparent_output::TransparentOutputInfo;
+pub use signatures::Signatures;
+pub use transparent_input::TransparentInput;
+pub use transparent_output::TransparentOutput;

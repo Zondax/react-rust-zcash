@@ -3,7 +3,10 @@ use crate::{
     create_builder, destroy_builder,
     error::{get_error_description, ZcashError},
     ffi::finalize_transaction,
-    free_transaction_data, TransactionSignatures, TransparentInputInfo, TransparentOutputInfo,
+    free_transaction_data,
+    transparent_input::TransparentInput,
+    transparent_output::TransparentOutput,
+    Signatures,
 };
 
 use jni::{
@@ -86,12 +89,14 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_addTranspar
     info!("Adding transparent input to builder: {}", builder_id);
 
     // Create a TransparentInputInfo from the Java object
-    let input = match TransparentInputInfo::from_java(&mut env, input_obj) {
+    let input = match TransparentInput::from_java(&mut env, input_obj) {
         Ok(input) => input,
         Err(e) => return e as jint,
     };
 
-    let result = add_transparent_input(builder_id as u64, input);
+    let c_input = input.as_raw();
+
+    let result = add_transparent_input(builder_id as u64, c_input);
 
     if result != ZcashError::Success as u32 {
         let error_msg = get_error_description(result);
@@ -101,6 +106,8 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_addTranspar
     result as jint
 }
 
+/// #Safety
+/// This function is called from Java code and must be safe to call from Java.
 #[no_mangle]
 pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_addTransparentOutput(
     mut env: JNIEnv,
@@ -112,12 +119,14 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_addTranspar
     info!("Adding transparent output to builder: {}", builder_id);
 
     // Create a TransparentOutputInfo from the Java object
-    let output = match TransparentOutputInfo::from_java(&mut env, output_obj) {
+    let output = match TransparentOutput::from_java(&mut env, output_obj) {
         Ok(output) => output,
         Err(e) => return e as jint,
     };
 
-    let result = add_transparent_output(builder_id as u64, output);
+    let c_output = output.as_raw();
+
+    let result = add_transparent_output(builder_id as u64, c_output);
 
     if result != ZcashError::Success as u32 {
         let error_msg = get_error_description(result);
@@ -128,7 +137,7 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_addTranspar
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_addSignatures(
+pub extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_addSignatures(
     mut env: JNIEnv,
     _class: JClass,
     builder_id: jlong,
@@ -138,16 +147,18 @@ pub unsafe extern "C" fn Java_expo_modules_myrustmodule_MyRustModule_addSignatur
     info!("Adding signatures to builder: {}", builder_id);
 
     // Create a TransactionSignatures from the Java object
-    let signatures = match TransactionSignatures::from_java(&mut env, signatures_obj) {
+    let signatures = match unsafe { Signatures::from_java(&mut env, signatures_obj) } {
         Ok(signatures) => signatures,
         Err(e) => return e as jint,
     };
 
-    let result = add_signatures(builder_id as u64, signatures);
+    let c_signs = signatures.as_raw();
+
+    let result = add_signatures(builder_id as u64, c_signs);
 
     if result != ZcashError::Success as u32 {
         let error_msg = get_error_description(result);
-        error!("Error destroying builder: {}", error_msg);
+        error!("Error adding signatures: {}", error_msg);
     }
 
     result as jint

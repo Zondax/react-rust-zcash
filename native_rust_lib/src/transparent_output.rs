@@ -1,37 +1,20 @@
-use std::ffi::{c_char, CStr};
+use crate::{deserialize_cstring, ZcashError};
+use std::ffi::CString;
 
-use zcash_primitives::{legacy::Script, transaction::components::Amount};
+use serde::{Deserialize, Serialize};
 
-use crate::{parser::parse_script, ZcashError};
+use crate::ffi::CTransparentOutput;
 
-#[repr(C)]
-pub struct TransparentOutputInfo {
-    address: *const c_char,
-    value: u64,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TransparentOutput {
+    #[serde(deserialize_with = "deserialize_cstring")]
+    pub address: CString,
+    pub value: u64,
 }
 
-impl TransparentOutputInfo {
-    pub fn from_raw(address: *const c_char, value: u64) -> Self {
-        Self { address, value }
-    }
-}
-
-impl TransparentOutputInfo {
-    pub fn address(&self) -> Result<Script, ZcashError> {
-        unsafe {
-            let address_str = CStr::from_ptr(self.address)
-                .to_str()
-                .map_err(|_| ZcashError::InvalidArgument)?;
-            parse_script(address_str)
-        }
-    }
-
-    pub fn amount(&self) -> Result<Amount, ZcashError> {
-        Amount::from_u64(self.value).map_err(|_| ZcashError::InvalidArgument)
-    }
-
-    pub fn any_null(&self) -> bool {
-        self.address.is_null()
+impl TransparentOutput {
+    pub fn as_raw(&self) -> CTransparentOutput {
+        CTransparentOutput::from_raw(self.address.as_ptr(), self.value)
     }
 }
 
@@ -42,8 +25,10 @@ use jni::{
     JNIEnv,
 };
 #[cfg(any(target_os = "android", test))]
-impl TransparentOutputInfo {
+impl TransparentOutput {
     pub unsafe fn from_java(env: &mut JNIEnv, obj: JObject) -> Result<Self, ZcashError> {
+        use std::ffi::CString;
+
         // Get address field
         let address_field = match env.get_field_id(
             env.get_object_class(&obj).unwrap(),
@@ -57,13 +42,20 @@ impl TransparentOutputInfo {
         // Use ReturnType::Object for string fields
         let address_value = match env.get_field_unchecked(&obj, address_field, ReturnType::Object) {
             Ok(value) => value.l().unwrap(),
-            Err(_) => return Err(ZcashError::InvalidArgument),
+            Err(_) => return Err(ZcashError::InvalidAddress),
         };
 
         let address_jstring = JString::from(address_value);
         if address_jstring.is_null() {
-            return Err(ZcashError::InvalidArgument);
+            return Err(ZcashError::InvalidAddress);
         }
+
+        // Extract string data safely into a Rust string
+        let address_rust_string = env
+            .get_string(&address_jstring)
+            .map_err(|_| ZcashError::InvalidAddress)?
+            .to_string_lossy()
+            .into_owned();
 
         // Get value field
         let value_field = match env.get_field_id(env.get_object_class(&obj).unwrap(), "value", "J")
@@ -77,13 +69,16 @@ impl TransparentOutputInfo {
             .get_field_unchecked(&obj, value_field, ReturnType::Primitive(Primitive::Long))
             .and_then(|value| value.j())
             .map(|long_value| long_value as u64)
-            .map_err(|_| ZcashError::InvalidArgument)?;
+            .map_err(|_| ZcashError::InvalidTxValue)?;
+
+        // Create CString from the Rust string
+        let address_cstring =
+            CString::new(address_rust_string).map_err(|_| ZcashError::InvalidAddress)?;
 
         // Create a new TransparentOutputInfo with the extracted values
-        let ret = Ok(TransparentOutputInfo {
-            address: env.get_string(&address_jstring).unwrap().as_ptr(),
-            value: value as u64,
-        });
-        ret
+        Ok(TransparentOutput {
+            address: address_cstring,
+            value,
+        })
     }
 }

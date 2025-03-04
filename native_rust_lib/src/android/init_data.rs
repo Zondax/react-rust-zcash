@@ -541,14 +541,11 @@ mod tests {
     use std::{fs::File, io::BufReader, path::Path};
 
     use super::*;
-    use crate::test::{TInput, TOutput, TestData, TxInitData};
+    use crate::test::TestData;
     use jni::{
         objects::{JByteArray, JClass, JObject, JValue},
         InitArgsBuilder, JNIEnv, JavaVM,
     };
-
-    // extracted from: https://github.com/Zondax/ledger-zcash/blob/main/tests_zemu/tests/txs_advanced.test.ts#L734
-    const EXPECTED_INIT_BLOB: &str = "020200002c000080850000800500008000000000000000001976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac50c30000000000002c000080850000800500008000000000000000001976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac50c30000000000001976a914000000000000000000000000000000000000000088ac10270000000000001976a9140f71709c4b828df00f93d20aa2c34ae987195b3388ac8038010000000000";
 
     fn open_test_data() -> TestData {
         let file_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/tx_2ti_2to.json");
@@ -558,7 +555,6 @@ mod tests {
     }
 
     #[test]
-    // #[ignore = "Requires JVM environment"]
     fn test_get_init_tx_data() {
         // Initialize JVM using InitArgsBuilder instead of InitArgs::default
         let jvm_args = InitArgsBuilder::new()
