@@ -15,6 +15,18 @@ web-build/
 *.p12
 *.key
 *.mobileprovision
+*.transforms
+*tmp
+*intermediates
+*compileDebugKotlin
+*compileDebugKotlin
+*.jar
+*debug/
+/build/outputs
+modules/my-rust-module/android/build/
+
+
+
 
 # Metro
 .metro-health-check*

@@ -18,13 +18,8 @@ public class MyRustModule: Module {
     // Defines event names that the module can send to JavaScript.
     Events("onChange")
 
-    // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
-    Function("hello") {
-      return "Hello world! 👋"
-    }
-
-    AsyncFunction("rustAdd") { (a: Int32, b: Int32) -> Int32 in
-      return rust_add(a, b)
+    AsyncFunction("calculateFee") { (a: UInt, b: UInt, c: UInt, d: UInt) -> UInt64 in
+      return calculate_fee(a, b, c, d)
     }
 
     // Defines a JavaScript function that always returns a Promise and whose native code
