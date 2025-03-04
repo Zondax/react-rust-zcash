@@ -1,5 +1,9 @@
 import { requireNativeModule } from "expo-modules-core";
-import { TransparentInput, TransparentOutput } from "./MyRustModule.types";
+import {
+  TransparentInput,
+  TransparentOutput,
+  Signatures,
+} from "./MyRustModule.types";
 
 // It loads the native module object from the JSI or falls back to
 // the bridge module (from NativeModulesProxy) if the remote debugger is on.
@@ -29,6 +33,8 @@ export default {
     txVersion: number,
   ) =>
     MyRustModule.buildTransaction(builderId, spendPath, outputPath, txVersion),
+  addSignatures: (builderId: number, signatures: Signatures) =>
+    MyRustModule.addSignatures(builderId, signatures),
   finalizeTransaction: (builderId: number) =>
     MyRustModule.finalizeTransaction(builderId),
   getErrorDescription: (errorCode: number) =>

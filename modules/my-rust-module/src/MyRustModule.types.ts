@@ -18,6 +18,12 @@ export interface TransparentOutput {
   value: number;
 }
 
+// TypeScript version
+export interface Signatures {
+  transparentSigs: string[];
+  saplingSigs: string[];
+}
+
 export interface TinData {
   path: number[]; // Array of 5 uint32 values
   address: string; // Hex-encoded string representing a Script

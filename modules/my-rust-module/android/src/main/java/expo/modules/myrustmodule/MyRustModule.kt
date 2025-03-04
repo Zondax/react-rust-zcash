@@ -72,6 +72,11 @@ data class InitData(
     val sOutput: List<SaplingOutData>
 )
 
+data class Signatures(
+    var transparentSigs: List<String> = listOf(),
+    var saplingSigs: List<String> = listOf()
+)
+
 // Convert a hex string to a ByteArray
 fun hexToByteArray(hex: String): ByteArray {
     val hexString = if (hex.startsWith("0x")) hex.substring(2) else hex
@@ -109,6 +114,7 @@ class MyRustModule : Module() {
     private external fun finalizeTransaction(builderId: Long): ByteArray
     private external fun getErrorDescription(errorCode: Int): String
     private external fun getInitTxData(initData: InitData): ByteArray
+    private external fun addSignatures(builderId: Long, signatures: Signatures): Int
     
     override fun definition() = ModuleDefinition {
         Name("MyRustModule")
